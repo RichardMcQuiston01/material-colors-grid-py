@@ -1,0 +1,98 @@
+# dependencies
+/node_modules
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (never commit secrets; .env.example documents the shape)
+.env
+.env.local
+.env.*.local
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# ======================================================================
+# Python
+# ======================================================================
+
+# ---- Byte-compiled / cache files ----
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ---- Distribution / packaging (PyPI) ----
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+*.whl
+*.manifest
+*.spec
+MANIFEST
+pip-wheel-metadata/
+__pypackages__/
+.pypirc
+
+# ---- Virtual environments ----
+.venv/
+venv/
+env/
+ENV/
+
+# ---- Testing / coverage ----
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+
+# ---- Type checking / linting caches ----
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+.pytype/
+
+# ---- Jupyter ----
+.ipynb_checkpoints/
+
+# ---- Editor / IDE ----
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+
+# ---- OS ----
+Thumbs.db
+
+# ---- Package managers ----
+pip-log.txt
+pip-delete-this-directory.txt
+poetry.lock.bak
