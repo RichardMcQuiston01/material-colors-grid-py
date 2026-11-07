@@ -2,7 +2,7 @@
 
 - Author: [Richard McQuiston](mailto:richard.mcquiston@gmail.com)
 - Website: [https://richardmcquiston.com/](https://richardmcquiston.com/
-- Python Registry: [https://pypi.org/user/richard.mcquiston01/](https://pypi.org/user/richard.mcquiston01/
+- Python Registry: [https://pypi.org/user/richard.mcquiston01/](https://pypi.org/user/richard.mcquiston01/)
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/P1V529Z7ZP)
 
