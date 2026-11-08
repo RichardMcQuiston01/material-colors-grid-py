@@ -1,9 +1,8 @@
 {
-  "id": 25525769,
   "name": "main-branch",
   "target": "branch",
   "source_type": "Repository",
-  "source": "RichardMcQuiston01/html-to-lvgl",
+  "source": "RichardMcQuiston01/material-colors-grid-py",
   "enforcement": "active",
   "conditions": {
     "ref_name": {
@@ -43,19 +42,7 @@
         "do_not_enforce_on_create": false,
         "required_status_checks": [
           {
-            "context": "Unit and golden-file tests",
-            "integration_id": 15368
-          },
-          {
-            "context": "Validate golden XML against LVGL v9.4",
-            "integration_id": 15368
-          },
-          {
-            "context": "Validate golden XML on MicroPython (lv_binding_micropython)",
-            "integration_id": 15368
-          },
-          {
-            "context": "Validate ESP32 boot under QEMU-Xtensa (lv_binding_micropython)",
+            "context": "CI Passed",
             "integration_id": 15368
           }
         ]
