@@ -11,6 +11,19 @@ EXPECTED_EXPORTS: list[str] = [
     "Style",
     "WatermarkPosition",
     "WatermarkStyle",
+    "create_category",
+    "create_color",
+    "create_default_document",
+    "create_sub_category",
+    "document_from_dict",
+    "document_to_json",
+    "is_hex_color",
+    "is_project_document",
+    "load_document_file",
+    "normalize_document",
+    "parse_imported_document",
+    "save_json_file",
+    "validate_project_document",
 ]
 
 
