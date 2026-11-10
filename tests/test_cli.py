@@ -403,7 +403,9 @@ def test_jpg_flattens_on_document_background(
     )
     assert code == 0
     with Image.open(output) as image:
-        red, green, blue = image.convert("RGB").getpixel((5, 5))
+        pixel = image.convert("RGB").getpixel((5, 5))
+    assert isinstance(pixel, tuple), f"Expected an RGB tuple, got {pixel!r}"
+    red, green, blue = pixel
     assert abs(red - 0x33) < 8 and abs(green - 0x66) < 8 and abs(blue - 0x99) < 8
 
 
