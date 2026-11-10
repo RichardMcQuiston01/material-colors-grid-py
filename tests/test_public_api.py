@@ -22,9 +22,22 @@ EXPECTED_EXPORTS: list[str] = [
     "build_render_model",
     "compute_layout",
     "contrast_ratio",
+    "create_category",
+    "create_color",
+    "create_default_document",
+    "create_sub_category",
+    "document_from_dict",
+    "document_to_json",
+    "is_hex_color",
+    "is_project_document",
+    "load_document_file",
+    "normalize_document",
     "parse_hex",
+    "parse_imported_document",
     "pick_readable_text_color",
     "relative_luminance",
+    "save_json_file",
+    "validate_project_document",
 ]
 
 
