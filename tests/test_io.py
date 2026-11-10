@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Any
 
 from material_colors_grid import (
     Err,
@@ -15,7 +16,52 @@ from material_colors_grid import (
     parse_imported_document,
     save_json_file,
 )
-from material_colors_grid.models import BandStyle, Style, WatermarkStyle
+from material_colors_grid.models import (
+    BandStyle,
+    BorderStyle,
+    CardFontStyle,
+    FontsStyle,
+    FontStyle,
+    Style,
+    WatermarkStyle,
+)
+
+TYPESCRIPT_DEFAULT_DOCUMENT: dict[str, Any] = {
+    "categories": [
+        {"id": "default", "name": "Default", "colors": [], "subCategories": []}
+    ],
+    "style": {
+        "orientation": "landscape",
+        "aspectRatio": "4:3",
+        "width": 1440,
+        "height": 1280,
+        "cardsPerRow": 5,
+        "cardBackground": "#f7f7f7",
+        "border": {"rounded": True, "thickness": "0.25rem", "color": "#dddddd"},
+        "fonts": {
+            "category": {"family": "Arial", "color": "#000000", "size": "1rem"},
+            "subCategory": {"family": "Arial", "color": "#000000", "size": "0.85rem"},
+            "card": {"family": "Arial", "color": "auto", "size": "0.75rem"},
+        },
+        "header": {
+            "text": "",
+            "background": "#1b5e20",
+            "font": {"family": "Arial", "color": "#ffffff", "size": "1.5rem"},
+        },
+        "footer": {
+            "text": "",
+            "background": "#1b5e20",
+            "font": {"family": "Arial", "color": "#ffffff", "size": "0.85rem"},
+        },
+        "watermark": {
+            "dataUrl": None,
+            "position": "bottom-right",
+            "scale": 0.15,
+            "opacity": 1,
+        },
+    },
+}
+"""A document literal copied from the TypeScript package's defaults."""
 
 
 def make_document() -> ProjectDocument:
@@ -26,13 +72,43 @@ def make_document() -> ProjectDocument:
         sub_categories=[nested],
     )
     style = Style(
+        orientation="portrait",
+        aspect_ratio="3:4",
         width=800,
         cards_per_row=3,
-        card_font_color="#222",
-        header=BandStyle(text="Colors", background_color="#eee"),
-        watermark=WatermarkStyle(image_path="logo.png", scale=0.3, opacity=1.0),
+        border=BorderStyle(rounded=False, thickness="2px", color="#abc"),
+        header=BandStyle(text="Colors", background="#eee"),
+        watermark=WatermarkStyle(data_url="data:image/png;base64,AAAA", scale=0.3),
     )
     return ProjectDocument(categories=(category,), style=style)
+
+
+def test_typescript_default_document_loads_as_python_defaults() -> None:
+    raw = json.dumps(TYPESCRIPT_DEFAULT_DOCUMENT)
+    assert parse_imported_document(raw) == Ok(create_default_document())
+
+
+def test_default_document_serializes_to_typescript_shape() -> None:
+    text = document_to_json(create_default_document())
+    assert json.loads(text) == TYPESCRIPT_DEFAULT_DOCUMENT
+    assert text == json.dumps(TYPESCRIPT_DEFAULT_DOCUMENT, indent=2)
+
+
+def test_typescript_document_round_trips_unchanged() -> None:
+    parsed = parse_imported_document(json.dumps(TYPESCRIPT_DEFAULT_DOCUMENT))
+    assert isinstance(parsed, Ok)
+    assert json.loads(document_to_json(parsed.value)) == TYPESCRIPT_DEFAULT_DOCUMENT
+
+
+def test_custom_style_values_survive_round_trip() -> None:
+    style = Style(
+        fonts=FontsStyle(
+            card=CardFontStyle(family="Courier", color="#222", size="12px"),
+            sub_category=FontStyle(size="2rem"),
+        ),
+    )
+    document = ProjectDocument(style=style)
+    assert parse_imported_document(document_to_json(document)) == Ok(document)
 
 
 def test_round_trip_equality() -> None:
@@ -53,11 +129,14 @@ def test_compact_json_round_trip() -> None:
     assert parse_imported_document(text) == Ok(document)
 
 
-def test_json_uses_snake_case_keys() -> None:
+def test_json_uses_camel_case_keys() -> None:
     data = json.loads(document_to_json(make_document()))
     assert set(data) == {"categories", "style"}
-    assert "sub_categories" in data["categories"][0]
-    assert "cards_per_row" in data["style"]
+    assert set(data["categories"][0]) == {"id", "name", "colors", "subCategories"}
+    assert set(data["categories"][0]["subCategories"][0]) == {"id", "name", "colors"}
+    assert data["style"]["cardsPerRow"] == 3
+    assert data["style"]["watermark"]["dataUrl"] == "data:image/png;base64,AAAA"
+    assert "cards_per_row" not in data["style"]
 
 
 def test_parse_partial_document_fills_defaults() -> None:
@@ -101,6 +180,13 @@ def test_parse_missing_required_field() -> None:
 def test_parse_invalid_style_value() -> None:
     result = parse_imported_document('{"style": {"width": "wide"}}')
     assert result == Err('style.width "wide" is invalid (expected an integer >= 1)')
+
+
+def test_parse_invalid_nested_size_names_json_path() -> None:
+    raw = '{"style": {"fonts": {"card": {"size": "12zz"}}}}'
+    result = parse_imported_document(raw)
+    assert isinstance(result, Err)
+    assert result.error.startswith('style.fonts.card.size "12zz" is invalid')
 
 
 def test_document_from_dict() -> None:

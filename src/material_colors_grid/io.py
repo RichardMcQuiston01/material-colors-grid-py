@@ -1,6 +1,8 @@
 """JSON import/export and file helpers for documents.
 
-JSON document shape (keys are the Python field names, in snake_case)::
+The JSON wire format is identical to the TypeScript package
+``@richardmcquiston01/material-colors-grid`` (camelCase keys); the Python
+dataclasses use snake_case and are converted here::
 
     {
       "categories": [
@@ -8,50 +10,143 @@ JSON document shape (keys are the Python field names, in snake_case)::
           "id": "<uuid>",
           "name": "PLA",
           "colors": [{"id": "<uuid>", "name": "Matte Black", "hex": "#111111"}],
-          "sub_categories": [ <category>, ... ]
+          "subCategories": [
+            {"id": "<uuid>", "name": "Silk", "colors": [<color>, ...]}
+          ]
         }
       ],
       "style": {
+        "orientation": "landscape",     // "portrait" | "landscape"
+        "aspectRatio": "4:3",
         "width": 1440,
         "height": 1280,
-        "cards_per_row": 4,
-        "background_color": "#ffffff",
-        "card_background_color": "#ffffff",
-        "card_border_color": "#cccccc",
-        "card_border_thickness": 1,
-        "card_corner_radius": 8,
-        "card_font_color": "auto",
-        "header": {"text": "", "background_color": "#ffffff",
-                   "font_color": "#000000"},
-        "footer": {"text": "", "background_color": "#ffffff",
-                   "font_color": "#000000"},
-        "watermark": {"image_path": null, "position": "bottom-right",
-                      "scale": 0.15, "opacity": 0.5}
+        "cardsPerRow": 5,
+        "cardBackground": "#f7f7f7",
+        "border": {"rounded": true, "thickness": "0.25rem", "color": "#dddddd"},
+        "fonts": {
+          "category": {"family": "Arial", "color": "#000000", "size": "1rem"},
+          "subCategory": {"family": "Arial", "color": "#000000", "size": "0.85rem"},
+          "card": {"family": "Arial", "color": "auto", "size": "0.75rem"}
+        },
+        "header": {
+          "text": "",                   // empty text: band is not drawn
+          "background": "#1b5e20",
+          "font": {"family": "Arial", "color": "#ffffff", "size": "1.5rem"}
+        },
+        "footer": {
+          "text": "",
+          "background": "#1b5e20",
+          "font": {"family": "Arial", "color": "#ffffff", "size": "0.85rem"}
+        },
+        "watermark": {
+          "dataUrl": null,              // image data URL or null
+          "position": "bottom-right",   // top-left|top-right|bottom-left|bottom-right
+          "scale": 0.15,                // fraction of canvas width, 0..1
+          "opacity": 1                  // 0..1
+        }
       }
     }
 
-Only user-authored data is stored; the render model and layout are derived.
+Hex colors are 3 or 6 digits with a leading ``#``; the ``card`` font color may
+also be ``"auto"``. Sizes are CSS sizes (``rem`` = 16px, ``px``, or a bare
+number). Only user-authored data is stored; the render model and layout are
+derived. Serialization is ``json.dumps(..., indent=2)`` with no wrapper keys,
+like the TypeScript ``documentToJson``.
 """
 
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any, cast
 
 from material_colors_grid.models import (
     BandStyle,
+    BorderStyle,
+    CardFontStyle,
     Category,
     Color,
+    FontsStyle,
+    FontStyle,
+    Orientation,
     ProjectDocument,
     Style,
+    SubCategory,
     WatermarkPosition,
     WatermarkStyle,
 )
 from material_colors_grid.normalize import normalize_document
 from material_colors_grid.result import Err, Ok, Result
 from material_colors_grid.validate import validate_project_document
+
+
+def _color_to_dict(color: Color) -> dict[str, Any]:
+    return {"id": color.id, "name": color.name, "hex": color.hex}
+
+
+def _json_number(value: float) -> int | float:
+    """Render whole floats as ints (``1`` not ``1.0``), as JavaScript does."""
+    return int(value) if float(value).is_integer() else value
+
+
+def _font_to_dict(font: FontStyle | CardFontStyle) -> dict[str, Any]:
+    return {"family": font.family, "color": font.color, "size": font.size}
+
+
+def _band_to_dict(band: BandStyle) -> dict[str, Any]:
+    return {
+        "text": band.text,
+        "background": band.background,
+        "font": _font_to_dict(band.font),
+    }
+
+
+def _sub_category_to_dict(sub_category: SubCategory) -> dict[str, Any]:
+    return {
+        "id": sub_category.id,
+        "name": sub_category.name,
+        "colors": [_color_to_dict(color) for color in sub_category.colors],
+    }
+
+
+def _category_to_dict(category: Category) -> dict[str, Any]:
+    return {
+        "id": category.id,
+        "name": category.name,
+        "colors": [_color_to_dict(color) for color in category.colors],
+        "subCategories": [
+            _sub_category_to_dict(child) for child in category.sub_categories
+        ],
+    }
+
+
+def _style_to_dict(style: Style) -> dict[str, Any]:
+    return {
+        "orientation": style.orientation,
+        "aspectRatio": style.aspect_ratio,
+        "width": style.width,
+        "height": style.height,
+        "cardsPerRow": style.cards_per_row,
+        "cardBackground": style.card_background,
+        "border": {
+            "rounded": style.border.rounded,
+            "thickness": style.border.thickness,
+            "color": style.border.color,
+        },
+        "fonts": {
+            "category": _font_to_dict(style.fonts.category),
+            "subCategory": _font_to_dict(style.fonts.sub_category),
+            "card": _font_to_dict(style.fonts.card),
+        },
+        "header": _band_to_dict(style.header),
+        "footer": _band_to_dict(style.footer),
+        "watermark": {
+            "dataUrl": style.watermark.data_url,
+            "position": style.watermark.position,
+            "scale": _json_number(style.watermark.scale),
+            "opacity": _json_number(style.watermark.opacity),
+        },
+    }
 
 
 def document_to_json(document: ProjectDocument, *, indent: int | None = 2) -> str:
@@ -62,13 +157,27 @@ def document_to_json(document: ProjectDocument, *, indent: int | None = 2) -> st
         indent: Indentation passed to ``json.dumps`` (``None`` for compact).
 
     Returns:
-        JSON text in the shape described in this module's docstring.
+        JSON text in the camelCase shape described in this module's docstring.
     """
-    return json.dumps(asdict(document), indent=indent)
+    return json.dumps(
+        {
+            "categories": [_category_to_dict(item) for item in document.categories],
+            "style": _style_to_dict(document.style),
+        },
+        indent=indent,
+    )
 
 
 def _color_from_dict(raw: dict[str, Any]) -> Color:
     return Color(id=raw["id"], name=raw["name"], hex=raw["hex"])
+
+
+def _sub_category_from_dict(raw: dict[str, Any]) -> SubCategory:
+    return SubCategory(
+        id=raw["id"],
+        name=raw["name"],
+        colors=tuple(_color_from_dict(color) for color in raw["colors"]),
+    )
 
 
 def _category_from_dict(raw: dict[str, Any]) -> Category:
@@ -77,22 +186,30 @@ def _category_from_dict(raw: dict[str, Any]) -> Category:
         name=raw["name"],
         colors=tuple(_color_from_dict(color) for color in raw["colors"]),
         sub_categories=tuple(
-            _category_from_dict(child) for child in raw["sub_categories"]
+            _sub_category_from_dict(child) for child in raw["subCategories"]
         ),
     )
+
+
+def _font_from_dict(raw: dict[str, Any]) -> FontStyle:
+    return FontStyle(family=raw["family"], color=raw["color"], size=raw["size"])
+
+
+def _card_font_from_dict(raw: dict[str, Any]) -> CardFontStyle:
+    return CardFontStyle(family=raw["family"], color=raw["color"], size=raw["size"])
 
 
 def _band_from_dict(raw: dict[str, Any]) -> BandStyle:
     return BandStyle(
         text=raw["text"],
-        background_color=raw["background_color"],
-        font_color=raw["font_color"],
+        background=raw["background"],
+        font=_font_from_dict(raw["font"]),
     )
 
 
 def _watermark_from_dict(raw: dict[str, Any]) -> WatermarkStyle:
     return WatermarkStyle(
-        image_path=raw["image_path"],
+        data_url=raw["dataUrl"],
         position=cast(WatermarkPosition, raw["position"]),
         scale=float(raw["scale"]),
         opacity=float(raw["opacity"]),
@@ -100,16 +217,25 @@ def _watermark_from_dict(raw: dict[str, Any]) -> WatermarkStyle:
 
 
 def _style_from_dict(raw: dict[str, Any]) -> Style:
+    border: dict[str, Any] = raw["border"]
+    fonts: dict[str, Any] = raw["fonts"]
     return Style(
+        orientation=cast(Orientation, raw["orientation"]),
+        aspect_ratio=raw["aspectRatio"],
         width=raw["width"],
         height=raw["height"],
-        cards_per_row=raw["cards_per_row"],
-        background_color=raw["background_color"],
-        card_background_color=raw["card_background_color"],
-        card_border_color=raw["card_border_color"],
-        card_border_thickness=raw["card_border_thickness"],
-        card_corner_radius=raw["card_corner_radius"],
-        card_font_color=raw["card_font_color"],
+        cards_per_row=raw["cardsPerRow"],
+        card_background=raw["cardBackground"],
+        border=BorderStyle(
+            rounded=border["rounded"],
+            thickness=border["thickness"],
+            color=border["color"],
+        ),
+        fonts=FontsStyle(
+            category=_font_from_dict(fonts["category"]),
+            sub_category=_font_from_dict(fonts["subCategory"]),
+            card=_card_font_from_dict(fonts["card"]),
+        ),
         header=_band_from_dict(raw["header"]),
         footer=_band_from_dict(raw["footer"]),
         watermark=_watermark_from_dict(raw["watermark"]),

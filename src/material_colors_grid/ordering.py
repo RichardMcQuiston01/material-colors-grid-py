@@ -12,7 +12,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from material_colors_grid.color import parse_hex, relative_luminance
-from material_colors_grid.models import Category, Color, ProjectDocument
+from material_colors_grid.models import (
+    Category,
+    Color,
+    ProjectDocument,
+    SubCategory,
+)
 from material_colors_grid.result import Err, Result
 
 DEFAULT_CATEGORY_NAME: str = "Default"
@@ -63,7 +68,7 @@ def _color_sort_key(color: RenderColor) -> tuple[int, float, str, str, str]:
     return (unknown, luminance, color.name.casefold(), color.name, color.id)
 
 
-def _category_sort_key(category: Category) -> tuple[str, str, str]:
+def _category_sort_key(category: Category | SubCategory) -> tuple[str, str, str]:
     """Alphabetical, case-insensitive; ties by exact name then id."""
     return (category.name.casefold(), category.name, category.id)
 
@@ -74,18 +79,19 @@ def _is_default_name(name: str) -> bool:
 
 
 def _build_category(
-    category: Category, depth: int, show_header: bool
+    category: Category | SubCategory, depth: int, show_header: bool
 ) -> RenderCategory:
-    """Sort one category's colors and recurse into its sub-categories."""
+    """Sort one category's colors and its (one level deep) sub-categories."""
     colors: tuple[RenderColor, ...] = tuple(
         sorted(
             (_to_render_color(color) for color in category.colors),
             key=_color_sort_key,
         )
     )
-    sub_categories: tuple[RenderCategory, ...] = tuple(
-        _build_category(child, depth + 1, True)
-        for child in sorted(category.sub_categories, key=_category_sort_key)
+    children: list[SubCategory] = (
+        sorted(category.sub_categories, key=_category_sort_key)
+        if isinstance(category, Category)
+        else []
     )
     return RenderCategory(
         id=category.id,
@@ -93,7 +99,9 @@ def _build_category(
         depth=depth,
         show_header=show_header,
         colors=colors,
-        sub_categories=sub_categories,
+        sub_categories=tuple(
+            _build_category(child, depth + 1, True) for child in children
+        ),
     )
 
 

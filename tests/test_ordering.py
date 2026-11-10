@@ -7,6 +7,7 @@ from material_colors_grid import (
     Color,
     ProjectDocument,
     RenderModel,
+    SubCategory,
     build_render_model,
 )
 
@@ -68,8 +69,8 @@ def test_categories_and_sub_categories_alphabetical() -> None:
             id="a",
             name="Alpha",
             sub_categories=(
-                Category(id="s2", name="Zed"),
-                Category(id="s1", name="apple"),
+                SubCategory(id="s2", name="Zed"),
+                SubCategory(id="s1", name="apple"),
             ),
         ),
     )

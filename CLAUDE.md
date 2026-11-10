@@ -30,7 +30,8 @@ Constraints:
 ```
 src/material_colors_grid/
   __init__.py      # Public API barrel (only place exports are declared)
-  models.py        # Dataclasses: ProjectDocument, Category, Color, Style
+  models.py        # Dataclasses: ProjectDocument, Category, SubCategory, Color, Style
+  units.py         # CSS size ('1rem', '12px') to pixels
   defaults.py      # create_default_document / create_category / create_color
   normalize.py     # Fill missing fields in partial documents
   validate.py      # is_hex_color, is_project_document (untrusted JSON)
@@ -52,17 +53,22 @@ easy to test.
 ## Domain Rules (must match the TypeScript package)
 
 - A `ProjectDocument` is a JSON-serializable tree of categories plus style
-  settings. Categories hold colors and/or sub-categories. A color has `id`,
-  `name`, `hex`.
+  settings. Categories hold colors and/or sub-categories (one level deep). A
+  color has `id`, `name`, `hex`.
 - Hex colors: 3- or 6-digit only, with leading `#`. Reject everything else.
 - **Ordering**: categories alphabetical, then sub-categories alphabetical,
   then colors **dark to light** (by luminance).
-- Cards wrap at `cards_per_row`.
+- JSON keys are camelCase (`cardsPerRow`, `subCategories`, `dataUrl`) exactly
+  as in the TS package; Python fields are snake_case. `io.py` converts.
+- Cards wrap at `cards_per_row` (default 5). Fonts/border sizes are CSS sizes
+  (`rem` = 16px).
 - A sole "Default" category prints **no header**.
 - Header/footer bands render only when they have text.
 - Card font color `"auto"` picks a readable color using WCAG contrast.
 - Default canvas is 1440x1280; grow the canvas if content would be clipped.
-- Watermark: image path/bytes, position (e.g. `bottom-right`), scale, opacity.
+- Watermark: `data_url` (image data URL or null), position (`top-left`,
+  `top-right`, `bottom-left`, `bottom-right`), scale (fraction of canvas width),
+  opacity (default 1).
 - Persist only user-authored data. The render model and layout are always
   derived, never stored.
 - JPG has no alpha: flatten onto the document background. GIF is palette

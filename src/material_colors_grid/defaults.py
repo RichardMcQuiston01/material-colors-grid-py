@@ -5,8 +5,15 @@ from __future__ import annotations
 import uuid
 from collections.abc import Iterable
 
-from material_colors_grid.models import Category, Color, ProjectDocument
+from material_colors_grid.models import (
+    Category,
+    Color,
+    ProjectDocument,
+    Style,
+    SubCategory,
+)
 
+DEFAULT_CATEGORY_ID = "default"
 DEFAULT_CATEGORY_NAME = "Default"
 
 
@@ -36,7 +43,7 @@ def create_category(
     name: str,
     *,
     colors: Iterable[Color] = (),
-    sub_categories: Iterable[Category] = (),
+    sub_categories: Iterable[SubCategory] = (),
     id: str | None = None,
 ) -> Category:
     """Create a category.
@@ -44,7 +51,7 @@ def create_category(
     Args:
         name: Display name, e.g. ``"PLA"``.
         colors: Colors held directly by the category.
-        sub_categories: Nested categories.
+        sub_categories: Sub-categories (one level deep).
         id: Optional explicit id. A UUID4 string is generated when omitted.
 
     Returns:
@@ -62,30 +69,43 @@ def create_sub_category(
     name: str,
     *,
     colors: Iterable[Color] = (),
-    sub_categories: Iterable[Category] = (),
     id: str | None = None,
-) -> Category:
-    """Create a category intended to be nested under another category.
-
-    Sub-categories have the same shape as categories; this function exists for
-    parity with the TypeScript API.
+) -> SubCategory:
+    """Create a sub-category to place inside a category.
 
     Args:
         name: Display name.
-        colors: Colors held directly by the sub-category.
-        sub_categories: Further nested categories.
+        colors: Colors held by the sub-category.
         id: Optional explicit id. A UUID4 string is generated when omitted.
 
     Returns:
-        The new ``Category``. This function never fails for valid arguments.
+        The new ``SubCategory``. This function never fails for valid arguments.
     """
-    return create_category(name, colors=colors, sub_categories=sub_categories, id=id)
+    return SubCategory(
+        id=id if id is not None else _generate_id(),
+        name=name,
+        colors=tuple(colors),
+    )
+
+
+def create_default_style() -> Style:
+    """Create the default style settings (identical to the TypeScript package).
+
+    Returns:
+        A ``Style`` with 1440x1280 landscape canvas, 5 cards per row, empty
+        header/footer text and no watermark.
+    """
+    return Style()
 
 
 def create_default_document() -> ProjectDocument:
     """Create an empty document with a sole ``"Default"`` category.
 
     Returns:
-        A ``ProjectDocument`` with default style settings.
+        A ``ProjectDocument`` whose category has id ``"default"``, plus the
+        default style.
     """
-    return ProjectDocument(categories=(create_category(DEFAULT_CATEGORY_NAME),))
+    return ProjectDocument(
+        categories=(create_category(DEFAULT_CATEGORY_NAME, id=DEFAULT_CATEGORY_ID),),
+        style=create_default_style(),
+    )

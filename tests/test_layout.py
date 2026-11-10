@@ -7,6 +7,7 @@ from material_colors_grid import (
     Layout,
     ProjectDocument,
     Style,
+    SubCategory,
     build_render_model,
     compute_layout,
 )
@@ -127,7 +128,9 @@ def test_named_categories_get_headings_in_order() -> None:
                 id="a",
                 name="A",
                 colors=make_colors(1),
-                sub_categories=(Category(id="s", name="Sub", colors=make_colors(1)),),
+                sub_categories=(
+                    SubCategory(id="s", name="Sub", colors=make_colors(1)),
+                ),
             ),
         )
     )

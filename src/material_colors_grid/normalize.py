@@ -2,15 +2,45 @@
 
 from __future__ import annotations
 
+import copy
 import uuid
-from dataclasses import asdict
-from typing import Any
+from typing import Any, Final
 
-from material_colors_grid.models import Style
+_DEFAULT_STYLE: Final[dict[str, Any]] = {
+    "orientation": "landscape",
+    "aspectRatio": "4:3",
+    "width": 1440,
+    "height": 1280,
+    "cardsPerRow": 5,
+    "cardBackground": "#f7f7f7",
+    "border": {"rounded": True, "thickness": "0.25rem", "color": "#dddddd"},
+    "fonts": {
+        "category": {"family": "Arial", "color": "#000000", "size": "1rem"},
+        "subCategory": {"family": "Arial", "color": "#000000", "size": "0.85rem"},
+        "card": {"family": "Arial", "color": "auto", "size": "0.75rem"},
+    },
+    "header": {
+        "text": "",
+        "background": "#1b5e20",
+        "font": {"family": "Arial", "color": "#ffffff", "size": "1.5rem"},
+    },
+    "footer": {
+        "text": "",
+        "background": "#1b5e20",
+        "font": {"family": "Arial", "color": "#ffffff", "size": "0.85rem"},
+    },
+    "watermark": {
+        "dataUrl": None,
+        "position": "bottom-right",
+        "scale": 0.15,
+        "opacity": 1,
+    },
+}
+"""Camel-case JSON defaults; tests assert they equal ``Style()``."""
 
 
 def _default_style() -> dict[str, Any]:
-    return asdict(Style())
+    return copy.deepcopy(_DEFAULT_STYLE)
 
 
 def _merge_mapping(defaults: dict[str, Any], provided: object) -> object:
@@ -18,7 +48,7 @@ def _merge_mapping(defaults: dict[str, Any], provided: object) -> object:
 
     A non-mapping ``provided`` is returned unchanged so validation can report
     it. ``None`` values fall back to the default, except where the default
-    itself is ``None`` (e.g. ``watermark.image_path``).
+    itself is ``None`` (e.g. ``watermark.dataUrl``).
     """
     if not isinstance(provided, dict):
         return provided
@@ -40,28 +70,36 @@ def _normalize_color(color: object) -> object:
     return normalized
 
 
-def _normalize_category(category: object) -> object:
-    if not isinstance(category, dict):
-        return category
-    normalized: dict[str, Any] = dict(category)
+def _normalize_group(group: object, child_key: str | None) -> object:
+    """Fill id and list fields of a category (``child_key``) or sub-category."""
+    if not isinstance(group, dict):
+        return group
+    normalized: dict[str, Any] = dict(group)
     if normalized.get("id") is None:
         normalized["id"] = str(uuid.uuid4())
-    for key, normalize_item in (
-        ("colors", _normalize_color),
-        ("sub_categories", _normalize_category),
-    ):
-        items = normalized.get(key)
-        if items is None:
-            normalized[key] = []
-        elif isinstance(items, list):
-            normalized[key] = [normalize_item(item) for item in items]
+    colors = normalized.get("colors")
+    if colors is None:
+        normalized["colors"] = []
+    elif isinstance(colors, list):
+        normalized["colors"] = [_normalize_color(item) for item in colors]
+    if child_key is not None:
+        children = normalized.get(child_key)
+        if children is None:
+            normalized[child_key] = []
+        elif isinstance(children, list):
+            normalized[child_key] = [_normalize_group(item, None) for item in children]
     return normalized
+
+
+def _normalize_category(category: object) -> object:
+    return _normalize_group(category, "subCategories")
 
 
 def normalize_document(raw: object) -> object:
     """Fill missing fields of a partial document mapping with defaults.
 
-    Missing ``style`` values come from ``Style``; missing ids are generated.
+    Missing ``style`` values come from the TypeScript defaults; missing ids
+    are generated.
     Required user data (``name``, ``hex``) is never invented, so validation
     still reports it. The input is not modified and this function never
     raises: anything that is not a mapping is returned unchanged.

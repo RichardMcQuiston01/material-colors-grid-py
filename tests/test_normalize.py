@@ -1,14 +1,23 @@
 import copy
 import json
-from dataclasses import asdict
 from typing import Any
 
-from material_colors_grid import Style, normalize_document
+from material_colors_grid import ProjectDocument, document_to_json, normalize_document
 
 
 def test_empty_object_gets_defaults() -> None:
     result = normalize_document({})
-    assert result == {"categories": [], "style": asdict(Style())}
+    assert result == {"categories": [], "style": default_style_json()}
+
+
+def default_style_json() -> dict[str, Any]:
+    style: dict[str, Any] = json.loads(document_to_json(ProjectDocument()))["style"]
+    return style
+
+
+def test_normalize_defaults_equal_model_defaults() -> None:
+    result: Any = normalize_document({})
+    assert result["style"] == default_style_json()
 
 
 def test_partial_style_keeps_provided_and_fills_rest() -> None:
@@ -18,7 +27,8 @@ def test_partial_style_keeps_provided_and_fills_rest() -> None:
     assert result["style"]["width"] == 800
     assert result["style"]["height"] == 1280
     assert result["style"]["header"]["text"] == "Hi"
-    assert result["style"]["header"]["font_color"] == "#000000"
+    assert result["style"]["header"]["background"] == "#1b5e20"
+    assert result["style"]["header"]["font"]["size"] == "1.5rem"
     assert result["style"]["watermark"]["position"] == "bottom-right"
 
 
@@ -28,7 +38,7 @@ def test_missing_ids_and_lists_are_filled() -> None:
     )
     category = result["categories"][0]
     assert isinstance(category["id"], str) and category["id"]
-    assert category["sub_categories"] == []
+    assert category["subCategories"] == []
     assert isinstance(category["colors"][0]["id"], str)
 
 
@@ -41,6 +51,21 @@ def test_required_user_data_is_not_invented() -> None:
 def test_null_style_value_falls_back_to_default() -> None:
     result: Any = normalize_document({"style": {"width": None}})
     assert result["style"]["width"] == 1440
+
+
+def test_null_watermark_data_url_stays_null() -> None:
+    result: Any = normalize_document({"style": {"watermark": {"dataUrl": None}}})
+    assert result["style"]["watermark"]["dataUrl"] is None
+
+
+def test_sub_categories_get_ids_and_colors() -> None:
+    result: Any = normalize_document(
+        {"categories": [{"name": "P", "subCategories": [{"name": "S"}]}]}
+    )
+    sub_category = result["categories"][0]["subCategories"][0]
+    assert sub_category["colors"] == []
+    assert isinstance(sub_category["id"], str) and sub_category["id"]
+    assert "subCategories" not in sub_category
 
 
 def test_input_is_not_mutated() -> None:

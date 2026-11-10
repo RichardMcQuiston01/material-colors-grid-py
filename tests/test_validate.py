@@ -79,27 +79,19 @@ def test_invalid_hex_message_names_path_and_value() -> None:
     )
 
 
-def test_nested_sub_category_path() -> None:
+def test_sub_category_color_path() -> None:
     raw = make_valid()
-    raw["categories"][0]["sub_categories"] = [
+    raw["categories"][0]["subCategories"] = [
         {
             "id": "x",
             "name": "S",
-            "colors": [],
-            "sub_categories": [
-                {
-                    "id": "y",
-                    "name": "T",
-                    "sub_categories": [],
-                    "colors": [{"id": "z", "name": "N", "hex": "red"}],
-                }
-            ],
+            "colors": [{"id": "z", "name": "N", "hex": "red"}],
         }
     ]
     result = validate_project_document(raw)
-    assert isinstance(result, Err)
-    assert result.error.startswith(
-        "categories[0].sub_categories[0].sub_categories[0].colors[0].hex"
+    assert result == Err(
+        'categories[0].subCategories[0].colors[0].hex "red" is invalid '
+        "(expected 3 or 6 hex digits)"
     )
 
 
@@ -121,16 +113,30 @@ def test_missing_top_level_keys() -> None:
     [
         (("style", "width"), 0, "style.width 0 is invalid"),
         (("style", "width"), True, "style.width true is invalid"),
-        (("style", "cards_per_row"), "4", 'style.cards_per_row "4" is invalid'),
-        (("style", "card_border_thickness"), -1, "style.card_border_thickness -1"),
-        (("style", "background_color"), "white", 'style.background_color "white"'),
-        (("style", "card_font_color"), "dark", 'style.card_font_color "dark"'),
+        (("style", "cardsPerRow"), "4", 'style.cardsPerRow "4" is invalid'),
+        (("style", "orientation"), "square", 'style.orientation "square"'),
+        (("style", "aspectRatio"), 4, "style.aspectRatio 4 is invalid"),
+        (("style", "cardBackground"), "white", 'style.cardBackground "white"'),
+        (("style", "border", "rounded"), "yes", 'style.border.rounded "yes"'),
+        (("style", "border", "thickness"), "2em", 'style.border.thickness "2em"'),
+        (("style", "border", "thickness"), "-1px", 'style.border.thickness "-1px"'),
+        (("style", "border", "color"), "#12", 'style.border.color "#12"'),
+        (("style", "fonts", "card", "size"), "12zz", 'style.fonts.card.size "12zz"'),
+        (("style", "fonts", "card", "color"), "dark", 'style.fonts.card.color "dark"'),
+        (("style", "fonts", "category", "color"), "auto", "style.fonts.category.color"),
+        (
+            ("style", "fonts", "subCategory", "family"),
+            1,
+            "style.fonts.subCategory.family 1",
+        ),
         (("style", "header", "text"), 5, "style.header.text 5 is invalid"),
-        (("style", "footer", "font_color"), "#1", 'style.footer.font_color "#1"'),
-        (("style", "watermark", "position"), "middle", 'watermark.position "middle"'),
-        (("style", "watermark", "scale"), 0, "style.watermark.scale 0 is invalid"),
-        (("style", "watermark", "opacity"), 1.5, "style.watermark.opacity 1.5"),
-        (("style", "watermark", "image_path"), 3, "style.watermark.image_path 3"),
+        (("style", "header", "background"), "green", 'style.header.background "green"'),
+        (("style", "footer", "font", "color"), "#1", 'style.footer.font.color "#1"'),
+        (("style", "footer", "font", "size"), "big", 'style.footer.font.size "big"'),
+        (("style", "watermark", "position"), "center", 'watermark.position "center"'),
+        (("style", "watermark", "scale"), 1.5, "style.watermark.scale 1.5 is invalid"),
+        (("style", "watermark", "opacity"), -0.1, "style.watermark.opacity -0.1"),
+        (("style", "watermark", "dataUrl"), 3, "style.watermark.dataUrl 3"),
         (("style",), "x", 'style "x" is invalid (expected an object)'),
         (("categories",), {}, "categories {} is invalid (expected an array)"),
         (("categories", 0), "x", 'categories[0] "x" is invalid'),
@@ -152,11 +158,24 @@ def test_invalid_fields_report_path_and_value(
 def test_auto_and_hex_font_colors_valid() -> None:
     for font_color in ("auto", "#fff"):
         raw = copy.deepcopy(make_valid())
-        raw["style"]["card_font_color"] = font_color
+        raw["style"]["fonts"]["card"]["color"] = font_color
         assert is_project_document(raw)
 
 
-def test_null_watermark_image_path_is_valid() -> None:
+def test_null_watermark_data_url_is_valid() -> None:
     raw = make_valid()
-    assert raw["style"]["watermark"]["image_path"] is None
+    assert raw["style"]["watermark"]["dataUrl"] is None
+    assert is_project_document(raw)
+
+
+def test_missing_nested_style_key_is_reported() -> None:
+    raw = make_valid()
+    del raw["style"]["fonts"]["card"]["size"]
+    assert validate_project_document(raw) == Err("style.fonts.card.size is missing")
+
+
+@pytest.mark.parametrize("size", ["1rem", "0.25rem", "12px", "12", ".5rem", "0"])
+def test_css_sizes_are_accepted(size: str) -> None:
+    raw = make_valid()
+    raw["style"]["border"]["thickness"] = size
     assert is_project_document(raw)

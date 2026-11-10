@@ -36,7 +36,6 @@ def test_create_sub_category_matches_category_shape() -> None:
     sub_category = create_sub_category("Silk", id="s1")
     assert (sub_category.id, sub_category.name) == ("s1", "Silk")
     assert sub_category.colors == ()
-    assert sub_category.sub_categories == ()
 
 
 def test_default_document_has_sole_default_category() -> None:
@@ -44,3 +43,5 @@ def test_default_document_has_sole_default_category() -> None:
     assert [category.name for category in document.categories] == ["Default"]
     assert document.style.width == 1440
     assert document.style.height == 1280
+    assert document.categories[0].id == "default"
+    assert document.categories[0].sub_categories == ()
