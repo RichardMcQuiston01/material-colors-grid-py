@@ -15,8 +15,7 @@ The CLI is a stable contract, so plugins should call it rather than depend on
 library internals. Flags, JSON keys, and exit codes change only with a
 CHANGELOG entry and a version bump.
 
-> CLI snippets here follow the documented CLI contract. Python library
-> snippets were run against the library.
+> CLI and Python snippets here were run against the CLI and library.
 
 ## 1. Build the color list
 
@@ -72,13 +71,22 @@ echo '[{"name": "Matte Black", "hex": "#111111", "category": "PLA"}]' \
 Success (exit code `0`):
 
 ```json
-{ "ok": true, "output": "grid.png", "width": 1440, "height": 1280 }
+{
+  "ok": true,
+  "output": "grid.png",
+  "width": 1440,
+  "height": 1280,
+  "format": "png"
+}
 ```
 
 Failure (exit code `1` or `2`):
 
 ```json
-{ "ok": false, "error": "Color \"Matte Black\" has invalid hex \"#12\" ..." }
+{
+  "ok": false,
+  "error": "\"<stdin>\": colors[0].hex \"#12\" is invalid for color \"X\" (expected 3 or 6 hex digits with a leading #)"
+}
 ```
 
 Rules the plugin can rely on:
@@ -95,8 +103,6 @@ Useful flags: `--format png|jpg|gif`, `--quality` (JPEG), `--cards-per-row`,
 without rendering, use `validate`.
 
 ## 4. Subprocess example
-
-> Unverified against the real CLI until `feature/cli` is merged.
 
 ```python
 from __future__ import annotations
@@ -255,13 +261,13 @@ before relying on numbers. These are assumptions, not Etsy rules:
 
 ## Troubleshooting by exit code
 
-| Exit | Meaning                      | What to do                                                                                                                                |
-| ---- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `0`  | Success                      | Read `output`, `width`, `height` from the JSON.                                                                                           |
-| `1`  | Runtime or render failure    | Read `error`. Typical causes: unwritable output path or missing directory, unreadable watermark file, encoding failure. Fix and retry.    |
-| `2`  | Invalid input or arguments   | Read `error`; it names the file, field, and value. Typical causes: bad hex (`#12`), malformed JSON, unknown flag or `--format`, no input. |
-| n/a  | `FileNotFoundError` on `run` | The CLI is not installed or not on `PATH`. Install the package.                                                                           |
-| any  | stdout is not JSON           | `--json` was omitted, or the process crashed. Show the stderr text.                                                                       |
+| Exit | Meaning                      | What to do                                                                                                                                                                                         |
+| ---- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `0`  | Success                      | Read `output`, `width`, `height` from the JSON.                                                                                                                                                    |
+| `1`  | Runtime or render failure    | Read `error`. Typical causes: unwritable output path or missing directory, unreadable watermark file, encoding failure. Fix and retry.                                                             |
+| `2`  | Invalid input or arguments   | Read `error`; it names the file, field, and value. Typical causes: bad hex (`#12`), malformed JSON, missing or unreadable input file, unknown flag or `--format`, unknown output suffix, no input. |
+| n/a  | `FileNotFoundError` on `run` | The CLI is not installed or not on `PATH`. Install the package.                                                                                                                                    |
+| any  | stdout is not JSON           | `--json` was omitted, or the process crashed. Show the stderr text.                                                                                                                                |
 
 Tip: run `material-colors-grid validate --input doc.json` first when a
 document is hand-edited, and `material-colors-grid schema` to see the exact

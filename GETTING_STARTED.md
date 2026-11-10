@@ -149,8 +149,6 @@ a document from it (see
 
 ## Use the CLI
 
-> CLI snippets in this section follow the documented CLI contract.
-
 ```bash
 # Full document in, PNG out
 material-colors-grid render --input doc.json --output grid.png
@@ -177,7 +175,7 @@ With `--json`, stdout is one JSON object and nothing else:
 
 ```bash
 material-colors-grid render --colors colors.json --output grid.png --json
-# {"ok": true, "output": "grid.png", "width": 1440, "height": 1280}
+# {"ok": true, "output": "grid.png", "width": 1440, "height": 1280, "format": "png"}
 # {"ok": false, "error": "..."}
 ```
 
