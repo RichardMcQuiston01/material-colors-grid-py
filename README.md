@@ -24,7 +24,17 @@ If you are looking for a TypeScript version for your project, this is directly i
 
 ### Installation
 
+```bash
+pip install material-colors-grid
+```
+
 ### Usage
+
+```bash
+echo '[{"name": "Matte Black", "hex": "#111111", "category": "PLA"}]' > colors.json
+material-colors-grid render --colors colors.json --output grid.png
+material-colors-grid validate --colors colors.json --json
+```
 
 ### Examples
 
