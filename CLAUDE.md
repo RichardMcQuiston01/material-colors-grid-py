@@ -171,8 +171,10 @@ Before opening a PR all of format, lint, mypy, pytest, and build must pass.
 - Renderer tests: assert image size, mode, and sampled pixel colors; add a
   few golden-image tests with a tolerance. Cover PNG, JPG, and GIF.
 - CLI tests call `main(argv)` and assert stdout JSON, stderr, and exit codes.
-- Fonts: bundle one open-licensed font so output is identical across
-  machines. Never depend on system fonts.
+- Fonts: use Pillow's built-in scalable font (`ImageFont.load_default(size=)`,
+  Aileron, OFL) so output does not depend on system fonts. Output depends only
+  on the installed Pillow version; regenerate `tests/golden/` with
+  `UPDATE_GOLDEN=1` if a Pillow upgrade changes text rasterization.
 
 ## Workflow
 
