@@ -1,1 +1,77 @@
-# ROADAP
+# Roadmap
+
+Development follows `.claude/skills/git-workflow/SKILL.md`: `feature/<name>`
+branches off `dev`, draft PRs into `dev`, then `dev` -> `main` via PR. Merge
+commits only. Releases are published to PyPI by pushing a `vX.Y.Z` tag on
+`main` (owner only).
+
+## 0.1.0
+
+### Stage 0: Foundation (blocks everything else)
+
+- [ ] `feature/scaffold`: `pyproject.toml` (hatchling, `src/` layout, console
+      script), ruff/mypy/pytest config, `models.py` and `result.py`
+      interfaces, bundled open-licensed font, `ci.yml` (Python 3.10-3.13).
+- [ ] Replace the copied LVGL status checks in
+      `.github/rulesets/main-branch.json` with this repo's CI checks.
+
+### Stage 1: Core (parallel, no file overlap)
+
+- [ ] `feature/validation-io`: `defaults`, `normalize`, `validate`, `io`.
+- [ ] `feature/color-layout`: `color` (hex, luminance, WCAG contrast),
+      `ordering`, `layout` (pure, no Pillow).
+- [ ] `feature/release-pipeline`: `publish.yml` (see below).
+
+### Stage 2: Renderer
+
+- [ ] `feature/renderer`: Pillow rendering to PNG, JPG, GIF; watermark,
+      header/footer bands, auto font color; golden-image tests.
+
+### Stage 3: CLI and docs (parallel)
+
+- [ ] `feature/cli`: `render`, `validate`, `schema`; `--json` output; exit
+      codes 0/1/2; simple color-list input.
+- [ ] `feature/docs-plugin-guide`: README, `GETTING_STARTED.md`, Claude
+      Plugin (Etsy) usage guide.
+
+### Stage 4: Hardening
+
+- [ ] Independent review against `CLAUDE.md`; security review (input
+      handling, file paths, Pillow decompression limits).
+- [ ] Verify the JSON document round-trips with the TypeScript package.
+- [ ] Fixes on `hotfix/<name>` branches off `dev`.
+
+### Stage 5: Release
+
+- [ ] On `dev`: bump version, date the `CHANGELOG.md` entry.
+- [ ] PR `dev` -> `main` (merge commit), then the owner pushes `v0.1.0`.
+
+## PyPI publish pipeline (`publish.yml`)
+
+Trigger: push of a tag matching `v[0-9]+.[0-9]+.[0-9]+`.
+
+1. **Verify**: tag commit is an ancestor of `origin/main`; tag equals the
+   `pyproject.toml` version; `CHANGELOG.md` has an entry for it.
+2. **Test**: full CI matrix.
+3. **Build**: `uv build`, `twine check`, upload artifacts.
+4. **Publish**: `pypa/gh-action-pypi-publish` via Trusted Publishing (OIDC),
+   in the `pypi` GitHub environment with required reviewers.
+5. **Release**: GitHub Release with dist files attached.
+6. `workflow_dispatch` publishes to TestPyPI only (dry run).
+
+Actions are pinned to commit SHAs; permissions are `contents: write` and
+`id-token: write` only.
+
+### Owner-only setup
+
+- Register `material-colors-grid` as a pending trusted publisher on PyPI and
+  TestPyPI (workflow `publish.yml`, environment `pypi` / `testpypi`).
+- Create the `pypi` and `testpypi` GitHub environments; add a required
+  reviewer to `pypi`.
+- Approve the `main` ruleset change; push release tags.
+
+## Later
+
+- Additional output formats (WebP).
+- Additional watermark and layout options as the TypeScript package gains
+  them.
