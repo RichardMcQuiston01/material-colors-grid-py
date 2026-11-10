@@ -13,20 +13,23 @@ return ``Err``. The renderer has no warnings channel; use
 ``validate_project_document`` to learn about bad colors up front.
 
 The watermark image is supplied by the caller (``watermark_image``); the
-renderer never reads ``style.watermark.image_path`` so that rendering does no
-file I/O. Position, scale and opacity come from ``style.watermark``. The
-watermark is drawn only when an image is passed.
+renderer never reads ``style.watermark.image_path`` (documents are untrusted,
+so that field is ignored here and by the CLI) and does no file I/O. Position,
+scale and opacity come from ``style.watermark``. The watermark is drawn only
+when an image is passed.
 """
 
 from __future__ import annotations
 
 import io
+import struct
 from functools import cache
 from pathlib import Path
 from typing import Literal
 
 from PIL import Image, ImageDraw, ImageFont
 
+from material_colors_grid.atomic import write_bytes_atomically
 from material_colors_grid.color import parse_hex, pick_readable_text_color
 from material_colors_grid.layout import (
     BandLayout,
@@ -338,8 +341,10 @@ def image_to_bytes(
             document's ``style.background_color``.
 
     Returns:
-        ``Ok(bytes)``, or ``Err`` naming the format when it is unknown, the
-        quality or background color is invalid, or Pillow cannot encode.
+        ``Ok(bytes)``, or ``Err`` naming the format (and the image size when
+        encoding fails) when the format is unknown, the quality or background
+        color is invalid, or the encoder cannot handle the image (for example
+        a GIF wider than 65535 pixels). Never raises for these.
     """
     if format not in ("png", "jpg", "gif"):
         return Err(f'Unknown image format "{format}" (expected png, jpg or gif)')
@@ -364,8 +369,17 @@ def image_to_bytes(
                     dither=Image.Dither.NONE,
                 )
                 palette_image.save(buffer, format="GIF")
-    except (OSError, ValueError) as error:
-        return Err(f"Could not encode image as {format}: {error}")
+    except (
+        OSError,
+        ValueError,
+        OverflowError,
+        struct.error,
+        Image.DecompressionBombError,
+    ) as error:
+        return Err(
+            f"Could not encode {image.width}x{image.height} image as {format}: "
+            f"{type(error).__name__}: {error}"
+        )
     return Ok(buffer.getvalue())
 
 
@@ -388,7 +402,12 @@ def save_image(
     quality: int = 90,
     background_color: str = "#ffffff",
 ) -> Result[Path]:
-    """Write an image to ``path``.
+    """Write an image to ``path`` safely and atomically.
+
+    The destination must not be a symlink and, if it exists, must be a regular
+    file (not a directory, FIFO or device such as ``/dev/stdout``). The image
+    is encoded first, written to a temporary file next to ``path`` and moved
+    into place, so a failure leaves neither a partial file nor a temp file.
 
     Args:
         image: The image to save.
@@ -399,8 +418,9 @@ def save_image(
         background_color: Flattening color for JPG/GIF, see ``image_to_bytes``.
 
     Returns:
-        ``Ok(path)``, or ``Err`` naming the path and format when the format
-        cannot be determined, encoding fails, or the file cannot be written.
+        ``Ok(path)``, or ``Err`` naming the path (and format) when the format
+        cannot be determined, encoding fails, the destination is a symlink or
+        not a regular file, or the file cannot be written.
     """
     destination: Path = Path(path)
     resolved_format: ImageFormat
@@ -416,8 +436,7 @@ def save_image(
     )
     if isinstance(encoded, Err):
         return Err(f'Could not save "{destination}": {encoded.error}')
-    try:
-        destination.write_bytes(encoded.value)
-    except OSError as error:
-        return Err(f'Could not write {resolved_format} to "{destination}": {error}')
+    written: Result[Path] = write_bytes_atomically(destination, encoded.value)
+    if isinstance(written, Err):
+        return Err(f"{written.error} (format {resolved_format})")
     return Ok(destination)

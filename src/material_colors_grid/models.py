@@ -44,7 +44,13 @@ class BandStyle:
 
 @dataclass(frozen=True, slots=True)
 class WatermarkStyle:
-    """Corner watermark settings."""
+    """Corner watermark settings.
+
+    ``image_path`` is stored for round-tripping only. It is ignored by the CLI
+    and by ``render_to_image`` (documents are untrusted, so no file named in a
+    document is ever opened). Pass the image explicitly instead, via the
+    ``watermark_image`` argument or the CLI ``--watermark`` flag.
+    """
 
     image_path: str | None = None
     position: WatermarkPosition = "bottom-right"
