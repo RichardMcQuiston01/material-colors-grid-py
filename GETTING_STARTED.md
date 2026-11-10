@@ -143,9 +143,25 @@ produce. `category` is optional (colors without one go into `Default`):
 ]
 ```
 
-The library has no list parser of its own; to use the list from Python, build
-a document from it (see
-[docs/claude-plugins.md](docs/claude-plugins.md#library-api-example)).
+From Python, `parse_color_list` turns the list's JSON text into a document
+(`color_list_to_document` does the same for an already decoded list). Both
+return a `Result`:
+
+```python
+from material_colors_grid import Err, parse_color_list, render_to_image
+
+built = parse_color_list(
+    '[{"name": "Matte Black", "hex": "#111111", "category": "PLA"},'
+    ' {"name": "Clear", "hex": "#eeeeee"}]'
+)
+if isinstance(built, Err):
+    raise SystemExit(built.error)  # e.g. colors[0].hex "#12" is invalid ...
+rendered = render_to_image(built.value)
+```
+
+Items may also carry an optional `sub_category`. See
+[docs/claude-plugins.md](docs/claude-plugins.md#library-api-example) for a
+complete example.
 
 ## Use the CLI
 

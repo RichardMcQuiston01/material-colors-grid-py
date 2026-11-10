@@ -1,9 +1,8 @@
 {
-  "id": 25525885,
   "name": "protect-tags",
   "target": "tag",
   "source_type": "Repository",
-  "source": "RichardMcQuiston01/html-to-lvgl",
+  "source": "RichardMcQuiston01/material-colors-grid-py",
   "enforcement": "active",
   "conditions": {
     "ref_name": {
