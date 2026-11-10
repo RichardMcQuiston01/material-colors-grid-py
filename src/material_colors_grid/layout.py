@@ -89,11 +89,16 @@ class Layout:
 
 
 def _flatten(categories: tuple[RenderCategory, ...]) -> list[RenderCategory]:
-    """Flatten depth-first, parent before children, keeping sorted order."""
+    """Flatten depth-first, parent before children, keeping sorted order.
+
+    Iterative so a deeply nested model cannot hit the recursion limit.
+    """
     flattened: list[RenderCategory] = []
-    for category in categories:
+    pending: list[RenderCategory] = list(reversed(categories))
+    while pending:
+        category: RenderCategory = pending.pop()
         flattened.append(category)
-        flattened.extend(_flatten(category.sub_categories))
+        pending.extend(reversed(category.sub_categories))
     return flattened
 
 

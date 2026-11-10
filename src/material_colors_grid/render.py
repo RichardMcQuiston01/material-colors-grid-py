@@ -36,7 +36,15 @@ from material_colors_grid.layout import (
     Rect,
     compute_layout,
 )
-from material_colors_grid.models import BandStyle, ProjectDocument, Style
+from material_colors_grid.limits import (
+    MAX_BAND_TEXT_LENGTH,
+    MAX_CANVAS_DIMENSION,
+    MAX_CANVAS_PIXELS,
+    MAX_CATEGORIES,
+    MAX_CATEGORY_DEPTH,
+    MAX_COLORS,
+)
+from material_colors_grid.models import BandStyle, Category, ProjectDocument, Style
 from material_colors_grid.ordering import RenderModel, build_render_model
 from material_colors_grid.result import Err, Ok, Result
 
@@ -53,6 +61,9 @@ PLACEHOLDER_FILL: RGB = (221, 221, 221)
 PLACEHOLDER_CROSS: RGB = (200, 40, 40)
 PLACEHOLDER_TEXT: RGB = (0, 0, 0)
 _ELLIPSIS: str = "..."
+# Text is cut to this many characters before it is measured, so unvalidated
+# models cannot make measuring expensive. Validated names are shorter.
+_MAX_RENDERED_TEXT_LENGTH: int = MAX_BAND_TEXT_LENGTH
 _SUFFIX_FORMATS: dict[str, ImageFormat] = {
     ".png": "png",
     ".jpg": "jpg",
@@ -79,17 +90,34 @@ def _style_color(label: str, hex_color: str) -> Result[RGB]:
 
 
 def _fit_text(text: str, max_width: int, start_size: int) -> tuple[str, int]:
-    """Shrink, then ellipsize, ``text`` so it fits in ``max_width`` pixels."""
+    """Shrink, then ellipsize, ``text`` so it fits in ``max_width`` pixels.
+
+    Text longer than ``_MAX_RENDERED_TEXT_LENGTH`` is cut first. The truncation
+    point is found by binary search, so only O(log n) measurements are made.
+    Returns ``""`` when not even the ellipsis fits.
+    """
+    if len(text) > _MAX_RENDERED_TEXT_LENGTH:
+        text = text[: _MAX_RENDERED_TEXT_LENGTH - len(_ELLIPSIS)] + _ELLIPSIS
     size: int = start_size
     while size > MIN_CARD_FONT_SIZE and _font(size).getlength(text) > max_width:
         size -= 2
     font: ImageFont.FreeTypeFont = _font(size)
-    fitted: str = text
-    while fitted and font.getlength(fitted) > max_width:
-        fitted = fitted[:-1]
-        if font.getlength(fitted.rstrip() + _ELLIPSIS) <= max_width:
-            return fitted.rstrip() + _ELLIPSIS, size
-    return fitted, size
+    if font.getlength(text) <= max_width:
+        return text, size
+    # Largest ``kept`` such that text[:kept] plus the ellipsis fits.
+    low: int = 0
+    high: int = len(text) - 1
+    best: int = -1
+    while low <= high:
+        middle: int = (low + high) // 2
+        if font.getlength(text[:middle].rstrip() + _ELLIPSIS) <= max_width:
+            best = middle
+            low = middle + 1
+        else:
+            high = middle - 1
+    if best < 0:
+        return "", size
+    return text[:best].rstrip() + _ELLIPSIS, size
 
 
 def _draw_band(
@@ -156,8 +184,12 @@ def _draw_card(
     if isinstance(border, Err):
         return border
     rect: Rect = card.rect
-    thickness: int = max(0, style.card_border_thickness)
-    radius: int = max(0, style.card_corner_radius)
+    half_card: int = min(rect.width, rect.height) // 2
+    # Keep the swatch inset non-inverted for absurd thickness or radius.
+    thickness: int = min(
+        max(0, style.card_border_thickness), max(0, half_card - CARD_PADDING - 1)
+    )
+    radius: int = min(max(0, style.card_corner_radius), half_card)
     left: int = rect.x
     top: int = rect.y
     right: int = rect.x + rect.width - 1
@@ -222,6 +254,13 @@ def _apply_watermark(
     overlay: Image.Image = watermark.convert("RGBA")
     target_width: int = max(1, round(canvas.width * settings.scale))
     target_height: int = max(1, round(overlay.height * target_width / overlay.width))
+    if target_width > canvas.width or target_height > canvas.height:
+        # Shrink to fit inside the canvas, keeping the aspect ratio. The sizes
+        # are computed first so a very tall or wide source never allocates a
+        # giant intermediate image.
+        fit: float = min(canvas.width / target_width, canvas.height / target_height)
+        target_width = min(canvas.width, max(1, int(target_width * fit)))
+        target_height = min(canvas.height, max(1, int(target_height * fit)))
     overlay = overlay.resize((target_width, target_height), Image.Resampling.LANCZOS)
     alpha: Image.Image = overlay.getchannel("A").point(
         lambda value: round(value * settings.opacity)
@@ -251,6 +290,52 @@ def _apply_watermark(
     return Ok(None)
 
 
+def _check_document_size(document: ProjectDocument) -> str | None:
+    """Return an error when the model is too big or too deep to render safely.
+
+    Iterative, so a hostile model cannot hit the recursion limit.
+    """
+    colors: int = 0
+    categories: int = 0
+    pending: list[tuple[Category, int]] = [
+        (category, 1) for category in document.categories
+    ]
+    while pending:
+        category, depth = pending.pop()
+        categories += 1
+        colors += len(category.colors)
+        if depth > MAX_CATEGORY_DEPTH:
+            return (
+                f"Category nesting deeper than {MAX_CATEGORY_DEPTH} levels "
+                f'at category "{category.name[:40]}"'
+            )
+        if categories > MAX_CATEGORIES:
+            return (
+                f"Document has more than {MAX_CATEGORIES} categories and "
+                "sub-categories (the maximum)"
+            )
+        if colors > MAX_COLORS:
+            return f"Document has more than {MAX_COLORS} colors (the maximum)"
+        pending.extend((child, depth + 1) for child in category.sub_categories)
+    return None
+
+
+def _check_layout_size(layout: Layout) -> str | None:
+    """Return an error when the computed canvas is larger than the limits."""
+    if layout.width > MAX_CANVAS_DIMENSION or layout.height > MAX_CANVAS_DIMENSION:
+        return (
+            f"Computed canvas {layout.width}x{layout.height} exceeds the maximum "
+            f"dimension of {MAX_CANVAS_DIMENSION} pixels"
+        )
+    pixels: int = layout.width * layout.height
+    if pixels > MAX_CANVAS_PIXELS:
+        return (
+            f"Computed canvas {layout.width}x{layout.height} = {pixels} pixels "
+            f"exceeds the maximum of {MAX_CANVAS_PIXELS} pixels"
+        )
+    return None
+
+
 def render_to_image(
     document: ProjectDocument, *, watermark_image: Image.Image | None = None
 ) -> Result[Image.Image]:
@@ -267,12 +352,20 @@ def render_to_image(
         ``Ok(image)`` with an RGBA image whose size is the computed layout
         size (the canvas grows when content would be clipped), or ``Err``
         naming the style field when a style color, watermark scale, opacity
-        or position is invalid. Swatches with an invalid hex are drawn as a
+        or position is invalid, or when the document or the computed canvas
+        exceeds the limits in ``material_colors_grid.limits`` (checked before
+        any image is allocated). Swatches with an invalid hex are drawn as a
         placeholder and do not cause an error.
     """
     style: Style = document.style
+    size_error: str | None = _check_document_size(document)
+    if size_error is not None:
+        return Err(size_error)
     render_model: RenderModel = build_render_model(document)
     layout: Layout = compute_layout(render_model, style)
+    layout_error: str | None = _check_layout_size(layout)
+    if layout_error is not None:
+        return Err(layout_error)
     background: Result[RGB] = _style_color("background_color", style.background_color)
     if isinstance(background, Err):
         return background
