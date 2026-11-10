@@ -38,7 +38,7 @@ commits only. Releases are published to PyPI by pushing a `vX.Y.Z` tag on
 
 - [ ] Independent review against `CLAUDE.md`; security review (input
       handling, file paths, Pillow decompression limits).
-- [ ] Verify the JSON document round-trips with the TypeScript package.
+- [ ] Verify the JSON document format is documented and round-trips.
 - [ ] Fixes on `hotfix/<name>` branches off `dev`.
 
 ### Stage 5: Release
@@ -73,5 +73,4 @@ Actions are pinned to commit SHAs; permissions are `contents: write` and
 ## Later
 
 - Additional output formats (WebP).
-- Additional watermark and layout options as the TypeScript package gains
-  them.
+- Additional watermark and layout options.

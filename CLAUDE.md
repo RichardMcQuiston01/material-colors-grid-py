@@ -4,7 +4,8 @@ Guidance for Claude Code when working in this repository.
 
 ## Project Overview
 
-`material-colors-grid` (PyPI) is a Python port of the TypeScript package
+`material-colors-grid` (PyPI) is a standalone Python package, inspired by the
+TypeScript package
 [`@richardmcquiston01/material-colors-grid`](https://github.com/RichardMcQuiston01/material-colors-grid).
 It lays out a grid of color swatches (filament, acrylic, etc.) and exports it
 as **PNG, JPG, or GIF** for online store listings.
@@ -22,8 +23,10 @@ Constraints:
 - Minimal dependencies: **Pillow** for rendering, stdlib for everything else
   (`argparse`, `json`, `dataclasses`). Do not add a dependency without asking.
 - Rendering is headless and deterministic (no display, no network).
-- Feature parity target is the TypeScript package. Match its behavior and
-  JSON document shape so documents are portable between both libraries.
+- The TypeScript package is **inspiration only**. This is a normal Python
+  package: idiomatic Python names, types, and conventions, and its own JSON
+  document format. Do not copy the TypeScript API or document shape, and do
+  not aim for compatibility with it.
 
 ## Project Structure
 
@@ -49,7 +52,7 @@ CHANGELOG.md  ROADMAP.md  README.md  GETTING_STARTED.md
 Keep `layout.py` and `ordering.py` free of Pillow so they stay pure and
 easy to test.
 
-## Domain Rules (must match the TypeScript package)
+## Domain Rules
 
 - A `ProjectDocument` is a JSON-serializable tree of categories plus style
   settings. Categories hold colors and/or sub-categories. A color has `id`,
@@ -87,7 +90,7 @@ else:
     document: ProjectDocument = result.value
 ```
 
-Keep the names parallel to the TS API (snake_case equivalents):
+Public names are idiomatic Python (snake_case):
 `create_default_document`, `create_category`, `create_sub_category`,
 `create_color`, `render_to_image`, `image_to_bytes`, `save_image`,
 `document_to_json`, `parse_imported_document`, `is_hex_color`,
