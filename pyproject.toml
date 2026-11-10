@@ -1,0 +1,65 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "material-colors-grid"
+version = "0.0.1"
+description = "Render a grid of material colors (filament, acrylic, etc.) to PNG, JPG, or GIF."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Richard McQuiston", email = "richard.mcquiston@gmail.com" }]
+keywords = ["colors", "swatches", "grid", "filament", "etsy", "image"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Graphics",
+    "Typing :: Typed",
+]
+dependencies = ["Pillow>=10.1"]
+
+[project.optional-dependencies]
+dev = ["ruff>=0.6", "mypy>=1.11", "pytest>=8", "twine>=5", "hatchling>=1.25"]
+
+[project.scripts]
+material-colors-grid = "material_colors_grid.cli:main"
+
+[project.urls]
+Homepage = "https://richardmcquiston.com/"
+Repository = "https://github.com/RichardMcQuiston01/material-colors-grid-py"
+Changelog = "https://github.com/RichardMcQuiston01/material-colors-grid-py/blob/main/CHANGELOG.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/material_colors_grid"]
+
+[tool.ruff]
+line-length = 88
+src = ["src", "tests"]
+extend-exclude = ["*.md"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "N", "D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D"]
+
+[tool.mypy]
+strict = true
+python_version = "3.10"
+files = ["src", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
