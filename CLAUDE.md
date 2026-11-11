@@ -67,7 +67,9 @@ easy to test.
 - Header/footer bands render only when they have text.
 - Card font color `"auto"` picks a readable color using WCAG contrast.
 - Default canvas is 1440x1280; grow the canvas if content would be clipped.
-- Watermark: image path/bytes, position (e.g. `bottom-right`), scale, opacity.
+- Watermark: the caller supplies the image (CLI `--watermark IMAGE_PATH`,
+  library `watermark_image=`); a document's `style.watermark.image_path` is
+  ignored and never opened. Position (e.g. `bottom-right`), scale, opacity.
 - Persist only user-authored data. The render model and layout are always
   derived, never stored.
 - JPG has no alpha: flatten onto the document background. GIF is palette
@@ -160,8 +162,8 @@ Before opening a PR all of format, lint, mypy, pytest, and build must pass.
   `Color "Matte Black" has invalid hex "#12" (expected 3 or 6 hex digits)`
   rather than `Invalid color`.
 - Catch expected errors (I/O, JSON, Pillow) at the boundary and convert to
-  `Err`. Continue where possible (e.g. skip a bad watermark with a warning
-  in the result); otherwise exit gracefully with a clear message.
+  `Err`. Continue where possible (e.g. ignore a document's watermark path
+  with a warning on stderr); otherwise exit gracefully with a clear message.
 - Docstrings on all public functions (what, args, returns, failure modes).
 - JSON everywhere for data interchange. No XML/SOAP.
 
