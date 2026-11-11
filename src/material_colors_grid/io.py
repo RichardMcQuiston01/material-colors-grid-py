@@ -41,6 +41,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from material_colors_grid.atomic import write_bytes_atomically
+from material_colors_grid.limits import MAX_JSON_INPUT_BYTES
 from material_colors_grid.models import (
     BandStyle,
     Category,
@@ -52,7 +53,12 @@ from material_colors_grid.models import (
 )
 from material_colors_grid.normalize import normalize_document
 from material_colors_grid.result import Err, Ok, Result
-from material_colors_grid.validate import validate_project_document
+from material_colors_grid.validate import (
+    check_json_text,
+    check_nesting_depth,
+    describe_value,
+    validate_project_document,
+)
 
 
 def document_to_json(document: ProjectDocument, *, indent: int | None = 2) -> str:
@@ -63,7 +69,9 @@ def document_to_json(document: ProjectDocument, *, indent: int | None = 2) -> st
         indent: Indentation passed to ``json.dumps`` (``None`` for compact).
 
     Returns:
-        JSON text in the shape described in this module's docstring.
+        JSON text in the shape described in this module's docstring. Any
+        document the parsers accept is within the nesting limit, so this does
+        not hit the recursion limit for them.
     """
     return json.dumps(asdict(document), indent=indent)
 
@@ -125,18 +133,27 @@ def document_from_dict(raw: dict[str, Any]) -> Result[ProjectDocument]:
 
     Returns:
         ``Ok`` with the document, or ``Err`` naming the JSON path and value at
-        fault. Never raises for malformed data.
+        fault (including limit violations, see ``limits``). Never raises for
+        malformed data.
     """
-    validated = validate_project_document(normalize_document(raw))
-    if isinstance(validated, Err):
-        return validated
-    data = validated.value
-    return Ok(
-        ProjectDocument(
-            categories=tuple(_category_from_dict(item) for item in data["categories"]),
-            style=_style_from_dict(data["style"]),
+    depth_error: str | None = check_nesting_depth(raw)
+    if depth_error is not None:
+        return Err(depth_error)
+    try:
+        validated = validate_project_document(normalize_document(raw))
+        if isinstance(validated, Err):
+            return validated
+        data = validated.value
+        return Ok(
+            ProjectDocument(
+                categories=tuple(
+                    _category_from_dict(item) for item in data["categories"]
+                ),
+                style=_style_from_dict(data["style"]),
+            )
         )
-    )
+    except RecursionError:
+        return Err("Document is nested too deeply to process")
 
 
 def parse_imported_document(raw_json: str) -> Result[ProjectDocument]:
@@ -146,19 +163,26 @@ def parse_imported_document(raw_json: str) -> Result[ProjectDocument]:
         raw_json: JSON text of a full or partial document.
 
     Returns:
-        ``Ok`` with the document. ``Err`` when the text is not valid JSON
-        (with line/column) or the data fails validation (with JSON path and
-        value). Never raises for bad input.
+        ``Ok`` with the document. ``Err`` when the text is too large or nested
+        too deeply, is not valid JSON (with line/column), or the data fails
+        validation (with JSON path and value). Never raises for bad input.
     """
+    limit_error: str | None = check_json_text(raw_json)
+    if limit_error is not None:
+        return Err(limit_error)
     try:
         decoded: object = json.loads(raw_json)
     except json.JSONDecodeError as error:
         return Err(
             f"Invalid JSON at line {error.lineno}, column {error.colno}: {error.msg}"
         )
+    except RecursionError:
+        return Err("JSON is nested too deeply to parse")
+    except ValueError as error:
+        return Err(f"JSON contains a number that cannot be parsed: {error}")
     if not isinstance(decoded, dict):
         return Err(
-            f"Document {json.dumps(decoded)[:60]} is invalid (expected an object)"
+            f"Document {describe_value(decoded)} is invalid (expected an object)"
         )
     return document_from_dict(decoded)
 
@@ -176,7 +200,14 @@ def load_document_file(path: str | Path) -> Result[ProjectDocument]:
     """
     file_path = Path(path)
     try:
-        text = file_path.read_text(encoding="utf-8-sig")
+        with file_path.open("rb") as handle:
+            content: bytes = handle.read(MAX_JSON_INPUT_BYTES + 1)
+        if len(content) > MAX_JSON_INPUT_BYTES:
+            return Err(
+                f'"{file_path}": file exceeds the maximum of '
+                f"{MAX_JSON_INPUT_BYTES} bytes"
+            )
+        text = content.decode("utf-8-sig")
     except (OSError, UnicodeDecodeError) as error:
         return Err(f'Cannot read "{file_path}": {error}')
     parsed = parse_imported_document(text)

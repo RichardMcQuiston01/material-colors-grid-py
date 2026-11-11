@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
+import math
 import uuid
 from dataclasses import asdict
-from typing import Any
+from typing import Any, Final
 
 from material_colors_grid.models import Style
+
+_INTEGER_STYLE_KEYS: Final = (
+    "width",
+    "height",
+    "cards_per_row",
+    "card_border_thickness",
+    "card_corner_radius",
+)
 
 
 def _default_style() -> dict[str, Any]:
@@ -29,6 +38,17 @@ def _merge_mapping(defaults: dict[str, Any], provided: object) -> object:
         elif isinstance(default_value, dict):
             merged[key] = _merge_mapping(default_value, merged[key])
     return merged
+
+
+def _whole_float_to_int(value: object) -> object:
+    """Turn a finite whole float (``1440.0``, ``1e3``) into an ``int``.
+
+    Everything else (ints, bools, fractions, NaN, infinity, other types) is
+    returned unchanged so validation can report it.
+    """
+    if isinstance(value, float) and math.isfinite(value) and value.is_integer():
+        return int(value)
+    return value
 
 
 def _normalize_color(color: object) -> object:
@@ -63,7 +83,9 @@ def normalize_document(raw: object) -> object:
 
     Missing ``style`` values come from ``Style``; missing ids are generated.
     Required user data (``name``, ``hex``) is never invented, so validation
-    still reports it. The input is not modified and this function never
+    still reports it. Whole-number floats in integer style fields (``1440.0``,
+    ``1e3``) become ints; fractions, NaN and infinity are left for validation
+    to reject. The input is not modified and this function never
     raises: anything that is not a mapping is returned unchanged.
 
     Args:
@@ -82,7 +104,11 @@ def normalize_document(raw: object) -> object:
     elif isinstance(categories, list):
         normalized["categories"] = [_normalize_category(item) for item in categories]
     style = normalized.get("style")
-    normalized["style"] = _merge_mapping(
+    merged_style: object = _merge_mapping(
         _default_style(), {} if style is None else style
     )
+    if isinstance(merged_style, dict):
+        for key in _INTEGER_STYLE_KEYS:
+            merged_style[key] = _whole_float_to_int(merged_style[key])
+    normalized["style"] = merged_style
     return normalized

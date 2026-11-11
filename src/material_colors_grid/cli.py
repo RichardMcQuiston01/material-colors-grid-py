@@ -202,7 +202,9 @@ def _wrong_flag_hint(text: str, *, is_color_list: bool) -> str:
     """Suggest the other flag when a list was given as a document or vice versa."""
     try:
         decoded: object = json.loads(text)
-    except ValueError:
+    except (ValueError, RecursionError):
+        # Not JSON, or nested too deeply to decode: the parse error already
+        # reported the real problem, so skip the hint.
         return ""
     if not is_color_list and isinstance(decoded, list):
         return " (this looks like a color list; did you mean --colors?)"
