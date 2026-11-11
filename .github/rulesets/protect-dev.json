@@ -1,16 +1,13 @@
 {
-  "id": 21214198,
   "name": "protect-dev",
   "target": "branch",
   "source_type": "Repository",
-  "source": "RichardMcQuiston01/html-to-lvgl",
+  "source": "RichardMcQuiston01/material-colors-grid-py",
   "enforcement": "active",
   "conditions": {
     "ref_name": {
       "exclude": [],
-      "include": [
-        "refs/heads/dev"
-      ]
+      "include": ["refs/heads/dev"]
     }
   },
   "rules": [

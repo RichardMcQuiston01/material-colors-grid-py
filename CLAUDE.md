@@ -4,7 +4,8 @@ Guidance for Claude Code when working in this repository.
 
 ## Project Overview
 
-`material-colors-grid` (PyPI) is a Python port of the TypeScript package
+`material-colors-grid` (PyPI) is a standalone Python package, inspired by the
+TypeScript package
 [`@richardmcquiston01/material-colors-grid`](https://github.com/RichardMcQuiston01/material-colors-grid).
 It lays out a grid of color swatches (filament, acrylic, etc.) and exports it
 as **PNG, JPG, or GIF** for online store listings.
@@ -22,8 +23,10 @@ Constraints:
 - Minimal dependencies: **Pillow** for rendering, stdlib for everything else
   (`argparse`, `json`, `dataclasses`). Do not add a dependency without asking.
 - Rendering is headless and deterministic (no display, no network).
-- Feature parity target is the TypeScript package. Match its behavior and
-  JSON document shape so documents are portable between both libraries.
+- The TypeScript package is **inspiration only**. This is a normal Python
+  package: idiomatic Python names, types, and conventions, and its own JSON
+  document format. Do not copy the TypeScript API or document shape, and do
+  not aim for compatibility with it.
 
 ## Project Structure
 
@@ -38,6 +41,8 @@ src/material_colors_grid/
   layout.py        # Pure layout engine (no drawing, no Pillow)
   color.py         # Hex parsing, luminance, WCAG contrast
   render.py        # Pillow renderer
+  colorlist.py     # Simple color-list parser -> ProjectDocument
+  schema.py        # document_json_schema (JSON Schema for documents)
   io.py            # document_to_json / parse_imported_document, file helpers
   result.py        # Result types (Ok / Err)
   cli.py           # CLI entry point
@@ -49,7 +54,7 @@ CHANGELOG.md  ROADMAP.md  README.md  GETTING_STARTED.md
 Keep `layout.py` and `ordering.py` free of Pillow so they stay pure and
 easy to test.
 
-## Domain Rules (must match the TypeScript package)
+## Domain Rules
 
 - A `ProjectDocument` is a JSON-serializable tree of categories plus style
   settings. Categories hold colors and/or sub-categories. A color has `id`,
@@ -62,7 +67,9 @@ easy to test.
 - Header/footer bands render only when they have text.
 - Card font color `"auto"` picks a readable color using WCAG contrast.
 - Default canvas is 1440x1280; grow the canvas if content would be clipped.
-- Watermark: image path/bytes, position (e.g. `bottom-right`), scale, opacity.
+- Watermark: the caller supplies the image (CLI `--watermark IMAGE_PATH`,
+  library `watermark_image=`); a document's `style.watermark.image_path` is
+  ignored and never opened. Position (e.g. `bottom-right`), scale, opacity.
 - Persist only user-authored data. The render model and layout are always
   derived, never stored.
 - JPG has no alpha: flatten onto the document background. GIF is palette
@@ -87,11 +94,12 @@ else:
     document: ProjectDocument = result.value
 ```
 
-Keep the names parallel to the TS API (snake_case equivalents):
+Public names are idiomatic Python (snake_case):
 `create_default_document`, `create_category`, `create_sub_category`,
 `create_color`, `render_to_image`, `image_to_bytes`, `save_image`,
 `document_to_json`, `parse_imported_document`, `is_hex_color`,
-`is_project_document`, `build_render_model`, `compute_layout`.
+`is_project_document`, `build_render_model`, `compute_layout`,
+`parse_color_list`, `color_list_to_document`, `document_json_schema`.
 
 Exceptions are reserved for programmer errors (wrong argument types).
 
@@ -111,8 +119,8 @@ material-colors-grid --version
 Rules:
 
 - **JSON in, JSON out.** With `--json`, stdout is a single JSON object, e.g.
-  `{"ok": true, "output": "grid.png", "width": 1440, "height": 1280}` or
-  `{"ok": false, "error": "..."}`.
+  `{"ok": true, "output": "grid.png", "width": 1440, "height": 1280, "format": "png"}`
+  or `{"ok": false, "error": "..."}`.
 - Accept a full document, or a simple color list for quick use:
   `[{"name": "Matte Black", "hex": "#111111", "category": "PLA"}]`.
   This simple form is what the Etsy plugin builds from listing options.
@@ -154,8 +162,8 @@ Before opening a PR all of format, lint, mypy, pytest, and build must pass.
   `Color "Matte Black" has invalid hex "#12" (expected 3 or 6 hex digits)`
   rather than `Invalid color`.
 - Catch expected errors (I/O, JSON, Pillow) at the boundary and convert to
-  `Err`. Continue where possible (e.g. skip a bad watermark with a warning
-  in the result); otherwise exit gracefully with a clear message.
+  `Err`. Continue where possible (e.g. ignore a document's watermark path
+  with a warning on stderr); otherwise exit gracefully with a clear message.
 - Docstrings on all public functions (what, args, returns, failure modes).
 - JSON everywhere for data interchange. No XML/SOAP.
 
@@ -168,8 +176,10 @@ Before opening a PR all of format, lint, mypy, pytest, and build must pass.
 - Renderer tests: assert image size, mode, and sampled pixel colors; add a
   few golden-image tests with a tolerance. Cover PNG, JPG, and GIF.
 - CLI tests call `main(argv)` and assert stdout JSON, stderr, and exit codes.
-- Fonts: bundle one open-licensed font so output is identical across
-  machines. Never depend on system fonts.
+- Fonts: the renderer uses Pillow's built-in scalable font
+  (`ImageFont.load_default(size=)`) and never system fonts. Output depends on
+  the installed Pillow version; regenerate the golden images in
+  `tests/golden/` with `UPDATE_GOLDEN=1` after a Pillow upgrade.
 
 ## Workflow
 
