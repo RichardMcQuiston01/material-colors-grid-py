@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "material-colors-grid"
-version = "0.0.1"
+version = "0.1.0"
 description = "Render a grid of material colors (filament, acrylic, etc.) to PNG, JPG, or GIF."
 readme = "README.md"
 requires-python = ">=3.10"

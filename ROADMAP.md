@@ -38,14 +38,13 @@ commits only. Releases are published to PyPI by pushing a `vX.Y.Z` tag on
 
 - [x] Independent review against `CLAUDE.md`; security review (input
       handling, file paths, Pillow decompression limits).
-- [ ] Verify the JSON document format is documented and round-trips.
-- [ ] Fixes on `hotfix/<name>` branches off `dev` (in progress:
-      `hotfix/input-limits`, `hotfix/untrusted-paths`,
-      `hotfix/docs-and-ci`).
+- [x] Verify the JSON document format is documented and round-trips.
+- [x] Fixes on `hotfix/<name>` branches off `dev` (`hotfix/input-limits`,
+      `hotfix/untrusted-paths`, `hotfix/docs-and-ci`), all merged.
 
 ### Stage 5: Release
 
-- [ ] On `dev`: bump version, date the `CHANGELOG.md` entry.
+- [x] On `dev`: bump version, date the `CHANGELOG.md` entry (`feature/release-0.1.0`).
 - [ ] PR `dev` -> `main` (merge commit), then the owner pushes `v0.1.0`.
 
 ## PyPI publish pipeline (`publish.yml`)
