@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## [0.1.0] - 2026-11-11
+
+First release.
+
 - Add the CLI: `render` (document via `--input` or simple color list via
   `--colors`; PNG/JPG/GIF; `--quality`, `--watermark`, `--header-text`,
   `--footer-text`, `--cards-per-row`), `validate`, `schema` (JSON Schema
