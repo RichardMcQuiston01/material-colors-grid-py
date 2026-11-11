@@ -5,20 +5,29 @@ Commands::
     material-colors-grid render --input doc.json --output grid.png
     material-colors-grid render --colors colors.json --output grid.jpg
     material-colors-grid validate --input doc.json
-    material-colors-grid schema
+    material-colors-grid schema [--json]
     material-colors-grid --version
 
 With ``--json``, stdout is exactly one JSON object: ``{"ok": true, ...}`` or
 ``{"ok": false, "error": "..."}``. Diagnostics always go to stderr. Exit
 codes: 0 success, 1 runtime/render/I-O failure, 2 invalid input or arguments.
+
+Untrusted documents: a document's ``style.watermark.image_path`` is ignored
+(never opened); a watermark is only loaded from the explicit ``--watermark``
+flag. Output files are written atomically and never through a symlink or to a
+non-regular file such as ``/dev/stdout``.
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import dataclasses
 import json
+import os
+import stat
 import sys
+import warnings
 from collections.abc import Sequence
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -38,6 +47,7 @@ EXIT_OK: int = 0
 EXIT_RUNTIME_ERROR: int = 1
 EXIT_INVALID_INPUT: int = 2
 DEFAULT_QUALITY: int = 90
+MAX_WATERMARK_BYTES: int = 20 * 1024 * 1024
 STDIN_LABEL: str = "<stdin>"
 _FORMAT_BY_NAME: dict[str, ImageFormat] = {"png": "png", "jpg": "jpg", "gif": "gif"}
 _FORMAT_BY_SUFFIX: dict[str, ImageFormat] = {
@@ -59,17 +69,18 @@ class CliFailure:
 class _UsageError(Exception):
     """Raised by the argument parser instead of exiting, so main can report it."""
 
-    def __init__(self, message: str, usage: str) -> None:
+    def __init__(self, message: str, usage: str, prog: str) -> None:
         super().__init__(message)
         self.message: str = message
         self.usage: str = usage
+        self.prog: str = prog
 
 
 class _ArgumentParser(argparse.ArgumentParser):
     """An ``ArgumentParser`` whose errors are raised, not printed and exited."""
 
     def error(self, message: str) -> NoReturn:
-        raise _UsageError(f"{self.prog}: {message}", self.format_usage())
+        raise _UsageError(message, self.format_usage(), self.prog)
 
 
 def _package_version() -> str:
@@ -148,7 +159,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_QUALITY,
         help=f"JPEG quality 1-100 (default {DEFAULT_QUALITY})",
     )
-    render.add_argument("--watermark", metavar="IMAGE_PATH", help="watermark image")
+    render.add_argument(
+        "--watermark",
+        metavar="IMAGE_PATH",
+        help="watermark image file (the only way to add a watermark: a "
+        "document's style.watermark.image_path is ignored)",
+    )
     render.add_argument("--header-text", metavar="TEXT", help="header band text")
     render.add_argument("--footer-text", metavar="TEXT", help="footer band text")
     render.add_argument(
@@ -160,8 +176,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_source_arguments(validate)
 
-    subparsers.add_parser(
+    schema = subparsers.add_parser(
         "schema", allow_abbrev=False, help="print the document JSON Schema"
+    )
+    schema.add_argument(
+        "--json",
+        action="store_true",
+        help="accepted for uniformity; the schema is always JSON",
     )
     return parser
 
@@ -171,10 +192,23 @@ def _read_text(path: str) -> Result[str]:
     label: str = STDIN_LABEL if path == "-" else path
     try:
         if path == "-":
-            return Ok(sys.stdin.read())
-        return Ok(Path(path).read_text(encoding="utf-8"))
+            return Ok(sys.stdin.read().removeprefix("\ufeff"))
+        return Ok(Path(path).read_text(encoding="utf-8-sig"))
     except (OSError, UnicodeDecodeError) as error:
         return Err(f'Cannot read "{label}": {error}')
+
+
+def _wrong_flag_hint(text: str, *, is_color_list: bool) -> str:
+    """Suggest the other flag when a list was given as a document or vice versa."""
+    try:
+        decoded: object = json.loads(text)
+    except ValueError:
+        return ""
+    if not is_color_list and isinstance(decoded, list):
+        return " (this looks like a color list; did you mean --colors?)"
+    if is_color_list and isinstance(decoded, dict):
+        return " (did you mean --input?)"
+    return ""
 
 
 def _load_document(args: argparse.Namespace) -> Ok[ProjectDocument] | CliFailure:
@@ -191,7 +225,8 @@ def _load_document(args: argparse.Namespace) -> Ok[ProjectDocument] | CliFailure
     )
     if isinstance(parsed, Err):
         label: str = STDIN_LABEL if path == "-" else path
-        return CliFailure(f'"{label}": {parsed.error}', EXIT_INVALID_INPUT)
+        hint: str = _wrong_flag_hint(text.value, is_color_list=is_color_list)
+        return CliFailure(f'"{label}": {parsed.error}{hint}', EXIT_INVALID_INPUT)
     return parsed
 
 
@@ -229,35 +264,69 @@ def _apply_overrides(
 
 
 def _load_watermark(path: str) -> Ok[Image.Image] | CliFailure:
-    """Open a watermark image, fully loaded and converted to RGBA."""
-    try:
-        with Image.open(path) as opened:
-            return Ok(opened.convert("RGBA"))
-    except (OSError, ValueError, Image.DecompressionBombError) as error:
+    """Open the explicit ``--watermark`` file, fully loaded, as RGBA.
+
+    The path must be a regular file of at most ``MAX_WATERMARK_BYTES`` (no
+    FIFOs, devices or directories, so opening can never hang), and Pillow's
+    decompression-bomb warning is treated as an error.
+    """
+
+    def failure(reason: str) -> CliFailure:
         return CliFailure(
-            f'Cannot read watermark "{path}": {error}', EXIT_RUNTIME_ERROR
+            f'Cannot read watermark "{path}": {reason}', EXIT_RUNTIME_ERROR
+        )
+
+    try:
+        status: os.stat_result = os.stat(path)
+    except OSError as error:
+        return failure(str(error))
+    if not stat.S_ISREG(status.st_mode):
+        return failure(
+            "not a regular file (directories, pipes and devices are refused)"
+        )
+    if status.st_size > MAX_WATERMARK_BYTES:
+        return failure(
+            f"file is {status.st_size} bytes, over the {MAX_WATERMARK_BYTES} byte limit"
+        )
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(path) as opened:
+                return Ok(opened.convert("RGBA"))
+    except (
+        OSError,
+        ValueError,
+        SyntaxError,
+        Image.DecompressionBombError,
+        Image.DecompressionBombWarning,
+    ) as error:
+        return failure(f"{type(error).__name__}: {error}")
+
+
+def _warn_ignored_document_watermark(document: ProjectDocument) -> None:
+    """Warn once on stderr when the document names a watermark path (ignored)."""
+    document_path: str | None = document.style.watermark.image_path
+    if document_path:
+        sys.stderr.write(
+            f"{PROG}: warning: ignoring style.watermark.image_path "
+            f"{json.dumps(document_path)} in the document (documents cannot "
+            "load files); pass --watermark IMAGE_PATH to add a watermark\n"
         )
 
 
 def _watermark_for(
     document: ProjectDocument, flag_path: str | None
 ) -> Ok[Image.Image | None] | CliFailure:
-    """Load the ``--watermark`` image, else the document's own ``image_path``.
+    """Load the ``--watermark`` image, if given.
 
-    A bad ``--watermark`` is a failure. A bad path stored in the document is
-    skipped with a warning on stderr so the render can still proceed.
+    The document's own ``image_path`` is never opened; it only triggers a
+    warning. A bad ``--watermark`` is a failure (exit 1).
     """
-    if flag_path is not None:
-        loaded = _load_watermark(flag_path)
-        return loaded if isinstance(loaded, CliFailure) else Ok(loaded.value)
-    document_path: str | None = document.style.watermark.image_path
-    if document_path is None:
+    _warn_ignored_document_watermark(document)
+    if flag_path is None:
         return Ok(None)
-    loaded = _load_watermark(document_path)
-    if isinstance(loaded, CliFailure):
-        sys.stderr.write(f"{PROG}: warning: {loaded.message}; rendering without it\n")
-        return Ok(None)
-    return Ok(loaded.value)
+    loaded = _load_watermark(flag_path)
+    return loaded if isinstance(loaded, CliFailure) else Ok(loaded.value)
 
 
 def _run_render(args: argparse.Namespace) -> dict[str, object] | CliFailure:
@@ -313,13 +382,15 @@ def _human_summary(args: argparse.Namespace, payload: dict[str, object]) -> str:
     return f"Valid: {STDIN_LABEL if path == '-' else path}"
 
 
-def _report_failure(failure: CliFailure, *, as_json: bool, usage: str = "") -> int:
+def _report_failure(
+    failure: CliFailure, *, as_json: bool, usage: str = "", prog: str = PROG
+) -> int:
     """Print a failure (JSON on stdout, or text on stderr) and return its code."""
     if as_json:
         sys.stdout.write(json.dumps({"ok": False, "error": failure.message}) + "\n")
     else:
         sys.stderr.write(usage)
-        sys.stderr.write(f"{PROG}: error: {failure.message}\n")
+        sys.stderr.write(f"{prog}: error: {failure.message}\n")
     return failure.exit_code
 
 
@@ -340,17 +411,20 @@ def _dispatch(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    """Run the CLI.
+def _handle_closed_stdout() -> int:
+    """React to a closed stdout pipe: no traceback, no flush error at exit."""
+    try:
+        devnull: int = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, sys.stdout.fileno())
+    except (OSError, ValueError):  # no real file descriptor (e.g. captured)
+        pass
+    with contextlib.suppress(OSError):
+        sys.stderr.write(f"{PROG}: error: stdout was closed before output finished\n")
+    return EXIT_RUNTIME_ERROR
 
-    Args:
-        argv: Argument list, or ``None`` to use ``sys.argv[1:]``.
 
-    Returns:
-        Process exit code: 0 success, 1 runtime failure, 2 invalid input.
-        Expected failures never raise or print a traceback.
-    """
-    arguments: list[str] = list(sys.argv[1:] if argv is None else argv)
+def _run(arguments: list[str]) -> int:
+    """Parse ``arguments``, run the command and print its result."""
     wants_json: bool = "--json" in arguments
     try:
         args: argparse.Namespace = build_parser().parse_args(arguments)
@@ -359,14 +433,37 @@ def main(argv: Sequence[str] | None = None) -> int:
             CliFailure(error.message, EXIT_INVALID_INPUT),
             as_json=wants_json,
             usage=error.usage,
+            prog=error.prog,
         )
     except SystemExit as exit_request:  # --help / --version
         return exit_request.code if isinstance(exit_request.code, int) else EXIT_OK
     try:
         return _dispatch(args)
+    except BrokenPipeError:
+        raise
     except Exception as error:  # noqa: BLE001 - last-resort boundary, no traceback
         message: str = f"Unexpected {type(error).__name__}: {error}"
         return _report_failure(
             CliFailure(message, EXIT_RUNTIME_ERROR),
             as_json=getattr(args, "json", False),
         )
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run the CLI.
+
+    Args:
+        argv: Argument list, or ``None`` to use ``sys.argv[1:]``.
+
+    Returns:
+        Process exit code: 0 success, 1 runtime failure, 2 invalid input.
+        Expected failures never raise or print a traceback, including a
+        closed stdout pipe (exit 1 with a one-line note on stderr).
+    """
+    arguments: list[str] = list(sys.argv[1:] if argv is None else argv)
+    try:
+        code: int = _run(arguments)
+        sys.stdout.flush()
+        return code
+    except BrokenPipeError:
+        return _handle_closed_stdout()
