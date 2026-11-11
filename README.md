@@ -102,6 +102,8 @@ A color list is the quickest input. Save this as `colors.json`:
 material-colors-grid render --colors colors.json --output grid.png
 ```
 
+From Python, `parse_color_list(text)` turns the same list into a document.
+
 ### Claude Plugins
 
 The CLI is designed for Claude Plugins, such as an Etsy plugin that builds a

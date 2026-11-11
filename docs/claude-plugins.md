@@ -161,66 +161,38 @@ tell the plugin user to run `pip install material-colors-grid`.
 
 ## Library API example
 
-Plugins that already run Python can skip the subprocess. The library does not
-parse the color-list format itself, so group the items into a document first.
-This snippet was run as written.
+Plugins that already run Python can skip the subprocess. `parse_color_list`
+takes the color-list JSON text; use `color_list_to_document` if the list is
+already decoded. Both return a `Result` and never raise for bad data. This
+snippet was run as written.
 
 ```python
 from __future__ import annotations
 
 import json
-from dataclasses import replace
 from pathlib import Path
 
 from material_colors_grid import (
-    Category,
     Err,
-    Ok,
-    ProjectDocument,
-    Result,
-    create_category,
-    create_color,
-    create_default_document,
-    is_hex_color,
+    color_list_to_document,
+    parse_color_list,
     render_to_image,
     save_image,
 )
 
-
-def document_from_color_list(
-    items: list[dict[str, str]],
-) -> Result[ProjectDocument]:
-    """Group {"name", "hex", optional "category"} items into a document."""
-    members_by_category: dict[str, list[dict[str, str]]] = {}
-    for index, item in enumerate(items):
-        name = item.get("name", "")
-        hex_value = item.get("hex", "")
-        if not name:
-            return Err(f"Item {index} has no name")
-        if not is_hex_color(hex_value):
-            return Err(
-                f'Color "{name}" has invalid hex "{hex_value}" '
-                "(expected 3 or 6 hex digits)"
-            )
-        category_name = item.get("category") or "Default"
-        members_by_category.setdefault(category_name, []).append(item)
-    categories: list[Category] = [
-        create_category(
-            category_name,
-            colors=[create_color(item["name"], item["hex"]) for item in members],
-        )
-        for category_name, members in members_by_category.items()
-    ]
-    return Ok(replace(create_default_document(), categories=tuple(categories)))
-
-
-options = json.loads(
+options_json = (
     '[{"name": "Matte Black", "hex": "#111111", "category": "PLA"},'
     ' {"name": "Signal Red", "hex": "#d62828", "category": "PLA"}]'
 )
-built = document_from_color_list(options)
+built = parse_color_list(options_json)
 if isinstance(built, Err):
     raise SystemExit(built.error)
+
+# Same result from an already decoded list:
+decoded_built = color_list_to_document(json.loads(options_json))
+if isinstance(decoded_built, Err):
+    raise SystemExit(decoded_built.error)
+
 rendered = render_to_image(built.value)
 if isinstance(rendered, Err):
     raise SystemExit(rendered.error)

@@ -11,6 +11,16 @@
 - Add the Pillow renderer: `render_to_image`, `image_to_bytes`, `save_image`
   (PNG, JPG, GIF) with header/footer bands, auto font color, placeholder for
   invalid swatch colors, and caller-supplied watermark image.
+- Add the document model (`ProjectDocument`, `Category`, `Color`, `Style`),
+  defaults, normalization, validation of untrusted JSON, and JSON import and
+  export helpers. Fallible functions return `Ok` or `Err`.
+- Add ordering (categories, sub-categories, then colors dark to light), the
+  pure layout engine, and color utilities (hex parsing, luminance, WCAG
+  contrast).
+- Add the simple color-list parser (`parse_color_list`,
+  `color_list_to_document`) and `document_json_schema` to the public API.
+- Add the release pipeline: PyPI Trusted Publishing workflow and tag, version
+  and changelog verification script.
 - Change (watermark): a document's `style.watermark.image_path` is now ignored
   and never opened, by the CLI and by `render_to_image`. Use
   `render --watermark IMAGE_PATH`; the CLI prints one warning on stderr when

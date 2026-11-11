@@ -697,7 +697,7 @@ dev = [
 requires-dist = [
     { name = "hatchling", marker = "extra == 'dev'", specifier = ">=1.25" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.11" },
-    { name = "pillow", specifier = ">=10.1" },
+    { name = "pillow", specifier = ">=10.3" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
     { name = "twine", marker = "extra == 'dev'", specifier = ">=5" },
