@@ -41,6 +41,8 @@ src/material_colors_grid/
   layout.py        # Pure layout engine (no drawing, no Pillow)
   color.py         # Hex parsing, luminance, WCAG contrast
   render.py        # Pillow renderer
+  colorlist.py     # Simple color-list parser -> ProjectDocument
+  schema.py        # document_json_schema (JSON Schema for documents)
   io.py            # document_to_json / parse_imported_document, file helpers
   result.py        # Result types (Ok / Err)
   cli.py           # CLI entry point
@@ -65,7 +67,9 @@ easy to test.
 - Header/footer bands render only when they have text.
 - Card font color `"auto"` picks a readable color using WCAG contrast.
 - Default canvas is 1440x1280; grow the canvas if content would be clipped.
-- Watermark: image path/bytes, position (e.g. `bottom-right`), scale, opacity.
+- Watermark: the caller supplies the image (CLI `--watermark IMAGE_PATH`,
+  library `watermark_image=`); a document's `style.watermark.image_path` is
+  ignored and never opened. Position (e.g. `bottom-right`), scale, opacity.
 - Persist only user-authored data. The render model and layout are always
   derived, never stored.
 - JPG has no alpha: flatten onto the document background. GIF is palette
@@ -94,7 +98,8 @@ Public names are idiomatic Python (snake_case):
 `create_default_document`, `create_category`, `create_sub_category`,
 `create_color`, `render_to_image`, `image_to_bytes`, `save_image`,
 `document_to_json`, `parse_imported_document`, `is_hex_color`,
-`is_project_document`, `build_render_model`, `compute_layout`.
+`is_project_document`, `build_render_model`, `compute_layout`,
+`parse_color_list`, `color_list_to_document`, `document_json_schema`.
 
 Exceptions are reserved for programmer errors (wrong argument types).
 
@@ -114,8 +119,8 @@ material-colors-grid --version
 Rules:
 
 - **JSON in, JSON out.** With `--json`, stdout is a single JSON object, e.g.
-  `{"ok": true, "output": "grid.png", "width": 1440, "height": 1280}` or
-  `{"ok": false, "error": "..."}`.
+  `{"ok": true, "output": "grid.png", "width": 1440, "height": 1280, "format": "png"}`
+  or `{"ok": false, "error": "..."}`.
 - Accept a full document, or a simple color list for quick use:
   `[{"name": "Matte Black", "hex": "#111111", "category": "PLA"}]`.
   This simple form is what the Etsy plugin builds from listing options.
@@ -157,8 +162,8 @@ Before opening a PR all of format, lint, mypy, pytest, and build must pass.
   `Color "Matte Black" has invalid hex "#12" (expected 3 or 6 hex digits)`
   rather than `Invalid color`.
 - Catch expected errors (I/O, JSON, Pillow) at the boundary and convert to
-  `Err`. Continue where possible (e.g. skip a bad watermark with a warning
-  in the result); otherwise exit gracefully with a clear message.
+  `Err`. Continue where possible (e.g. ignore a document's watermark path
+  with a warning on stderr); otherwise exit gracefully with a clear message.
 - Docstrings on all public functions (what, args, returns, failure modes).
 - JSON everywhere for data interchange. No XML/SOAP.
 
@@ -171,10 +176,10 @@ Before opening a PR all of format, lint, mypy, pytest, and build must pass.
 - Renderer tests: assert image size, mode, and sampled pixel colors; add a
   few golden-image tests with a tolerance. Cover PNG, JPG, and GIF.
 - CLI tests call `main(argv)` and assert stdout JSON, stderr, and exit codes.
-- Fonts: use Pillow's built-in scalable font (`ImageFont.load_default(size=)`,
-  Aileron, OFL) so output does not depend on system fonts. Output depends only
-  on the installed Pillow version; regenerate `tests/golden/` with
-  `UPDATE_GOLDEN=1` if a Pillow upgrade changes text rasterization.
+- Fonts: the renderer uses Pillow's built-in scalable font
+  (`ImageFont.load_default(size=)`) and never system fonts. Output depends on
+  the installed Pillow version; regenerate the golden images in
+  `tests/golden/` with `UPDATE_GOLDEN=1` after a Pillow upgrade.
 
 ## Workflow
 

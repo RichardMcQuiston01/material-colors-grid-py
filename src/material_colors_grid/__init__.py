@@ -8,6 +8,7 @@ from material_colors_grid.color import (
     pick_readable_text_color,
     relative_luminance,
 )
+from material_colors_grid.colorlist import color_list_to_document, parse_color_list
 from material_colors_grid.defaults import (
     create_category,
     create_color,
@@ -52,6 +53,7 @@ from material_colors_grid.render import (
     save_image,
 )
 from material_colors_grid.result import Err, Ok, Result
+from material_colors_grid.schema import document_json_schema
 from material_colors_grid.validate import (
     is_hex_color,
     is_project_document,
@@ -79,6 +81,7 @@ __all__ = [
     "WatermarkPosition",
     "WatermarkStyle",
     "build_render_model",
+    "color_list_to_document",
     "compute_layout",
     "contrast_ratio",
     "create_category",
@@ -86,12 +89,14 @@ __all__ = [
     "create_default_document",
     "create_sub_category",
     "document_from_dict",
+    "document_json_schema",
     "document_to_json",
     "image_to_bytes",
     "is_hex_color",
     "is_project_document",
     "load_document_file",
     "normalize_document",
+    "parse_color_list",
     "parse_hex",
     "parse_imported_document",
     "pick_readable_text_color",

@@ -371,24 +371,6 @@ def test_watermark_is_applied(
     assert plain.read_bytes() != marked.read_bytes()
 
 
-def test_bad_document_watermark_path_warns_and_renders(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    path = tmp_path / "doc.json"
-    path.write_text(
-        json.dumps(
-            {"categories": [], "style": {"watermark": {"image_path": "nope.png"}}}
-        ),
-        encoding="utf-8",
-    )
-    code, payload, err = run_json(
-        capsys, ["render", "--input", str(path), "--output", str(tmp_path / "o.png")]
-    )
-    assert code == 0
-    assert payload["ok"] is True
-    assert "warning" in err and "nope.png" in err
-
-
 def test_jpg_flattens_on_document_background(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

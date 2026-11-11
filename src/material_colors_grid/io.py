@@ -40,6 +40,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, cast
 
+from material_colors_grid.atomic import write_bytes_atomically
 from material_colors_grid.limits import MAX_JSON_INPUT_BYTES
 from material_colors_grid.models import (
     BandStyle,
@@ -195,7 +196,7 @@ def load_document_file(path: str | Path) -> Result[ProjectDocument]:
     Returns:
         ``Ok`` with the document. ``Err`` naming ``path`` when it cannot be
         read (missing, permission denied, not UTF-8) or its contents are
-        invalid.
+        invalid. A leading UTF-8 BOM is accepted.
     """
     file_path = Path(path)
     try:
@@ -206,7 +207,7 @@ def load_document_file(path: str | Path) -> Result[ProjectDocument]:
                 f'"{file_path}": file exceeds the maximum of '
                 f"{MAX_JSON_INPUT_BYTES} bytes"
             )
-        text = content.decode("utf-8")
+        text = content.decode("utf-8-sig")
     except (OSError, UnicodeDecodeError) as error:
         return Err(f'Cannot read "{file_path}": {error}')
     parsed = parse_imported_document(text)
@@ -216,7 +217,11 @@ def load_document_file(path: str | Path) -> Result[ProjectDocument]:
 
 
 def save_json_file(path: str | Path, text: str) -> Result[Path]:
-    """Write JSON text to a file (UTF-8).
+    """Write JSON text to a file (UTF-8), safely and atomically.
+
+    The destination must not be a symlink and, if it exists, must be a regular
+    file. The text goes to a temporary file next to ``path`` and is moved into
+    place, so a failure leaves no partial file.
 
     Args:
         path: Destination file. Parent directories must already exist.
@@ -224,11 +229,12 @@ def save_json_file(path: str | Path, text: str) -> Result[Path]:
 
     Returns:
         ``Ok`` with the written ``Path``, or ``Err`` naming ``path`` when the
-        write fails (missing directory, permission denied, ...).
+        write fails (symlink or non-regular destination, missing directory,
+        permission denied, ...).
     """
     file_path = Path(path)
     try:
-        file_path.write_text(text, encoding="utf-8")
-    except OSError as error:
-        return Err(f'Cannot write "{file_path}": {error}')
-    return Ok(file_path)
+        encoded: bytes = text.encode("utf-8")
+    except UnicodeEncodeError as error:
+        return Err(f'Cannot write "{file_path}": text is not valid UTF-8: {error}')
+    return write_bytes_atomically(file_path, encoded)
